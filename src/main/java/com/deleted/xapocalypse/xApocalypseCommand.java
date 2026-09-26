@@ -22,7 +22,7 @@ import java.util.concurrent.ThreadLocalRandom;
  * <pre>
  *   /xa help                                      show the command list
  *   /xa reload                                    reload config + language
- *   /xa item &lt;item&gt; [player]                      give a special item
+ *   /xa item &lt;item&gt; [player] [amount]             give special items
  *   /xa spawn &lt;type|horde&gt; [count] [radius]        spawn zombies
  *   /xa forcebloodmoon [minutes]   (alias fbm)    force a blood moon
  *   /xa stopbloodmoon              (alias sbm)    end a blood moon
@@ -105,7 +105,7 @@ public class xApocalypseCommand implements CommandExecutor {
         return true;
     }
 
-    /** {@code /xa item <item> [player]} */
+    /** {@code /xa item <item> [player] [amount]} */
     private boolean handleItem(CommandSender sender, String[] args) {
         if (!sender.hasPermission("xapocalypse.admin")) {
             sender.sendMessage(messageManager.get("no-permission"));
@@ -137,7 +137,8 @@ public class xApocalypseCommand implements CommandExecutor {
         }
 
         if (args.length >= 1 && args[0].equalsIgnoreCase("zombie_guts") && plugin.isZombieGutsEnabled()) {
-            ItemStack guts = plugin.getImmunity().createZombieGutsItem(1);
+            int amount = parseItemAmount(args);
+            ItemStack guts = plugin.getImmunity().createZombieGutsItem(amount);
             if (!targetPlayer.getInventory().addItem(guts).isEmpty()) {
                 sender.sendMessage("§c" + targetPlayer.getName() + "'s inventory is full.");
                 return true;
@@ -152,6 +153,18 @@ public class xApocalypseCommand implements CommandExecutor {
         }
         sender.sendMessage(messageManager.getWithPrefix("commands.item.unknown", args.length > 0 ? args[0] : "none"));
         return true;
+    }
+
+    static int parseItemAmount(String[] args) {
+        if (args.length < 3) {
+            return 1;
+        }
+
+        try {
+            return Math.clamp(Integer.parseInt(args[2]), 1, 64);
+        } catch (NumberFormatException ignored) {
+            return 1;
+        }
     }
 
     /** {@code /xa forcebloodmoon [minutes]} (alias {@code fbm}) */
