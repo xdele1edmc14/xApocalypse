@@ -468,22 +468,25 @@ public class xApocalypseUtils {
         // previously ignored — the values below were all hardcoded).
         Long lastHeal = nurse.getPersistentDataContainer().get(LAST_HEAL_KEY, PersistentDataType.LONG);
         if (lastHeal != null && (now - lastHeal) < nurseIntervalMs) return;
+        nurse.getPersistentDataContainer().set(LAST_HEAL_KEY, PersistentDataType.LONG, now);
 
         boolean healed = false;
         int healedCount = 0;
         for (Entity e : nurse.getNearbyEntities(nurseRadius, nurseRadius, nurseRadius)) {
             if (healedCount >= nurseMaxTargets) break;
             if (e instanceof Zombie z) {
+                if (!z.isValid() || z.isDead()) continue;
+                double health = z.getHealth();
+                if (health <= 0.0) continue;
                 var maxHealth = z.getAttribute(AttributeResolver.MAX_HEALTH);
-                if (maxHealth == null || z.getHealth() >= maxHealth.getValue()) continue;
-                z.setHealth(Math.min(z.getHealth() + nurseHealAmount, maxHealth.getValue()));
+                if (maxHealth == null || health >= maxHealth.getValue()) continue;
+                z.setHealth(Math.min(health + nurseHealAmount, maxHealth.getValue()));
                 z.getWorld().spawnParticle(Particle.HEART, z.getLocation().add(0, 1.5, 0), 5, 0.2, 0.2, 0.2, 0.1);
                 healed = true;
                 healedCount++;
             }
         }
         if (healed) {
-            nurse.getPersistentDataContainer().set(LAST_HEAL_KEY, PersistentDataType.LONG, now);
             nurse.getWorld().playSound(nurse.getLocation(), Sound.ENTITY_VILLAGER_YES, 1.0f, 1.0f);
         }
     }

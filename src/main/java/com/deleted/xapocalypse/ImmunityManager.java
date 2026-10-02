@@ -25,10 +25,10 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -49,6 +49,7 @@ public class ImmunityManager {
     // --- PERSISTENCE (data.yml is owned entirely by the immunity subsystem) ---
     private File dataFile;
     private FileConfiguration dataConfig;
+    private AtomicYamlWriter dataWriter;
 
     // --- IMMUNITY TRACKING ---
     // Bug fix: this was a List<UUID>, which permitted DUPLICATE entries. loadImmunityData()
@@ -58,10 +59,10 @@ public class ImmunityManager {
     // List.remove() then stripped only ONE copy, leaving the player permanently flagged immune in
     // memory (zombies ignored them; re-consuming Zombie Guts said "already immune") even though
     // data.yml was correctly cleared. A Set cannot hold duplicates, so every expiry path now fully
-    // clears membership. LinkedHashSet keeps deterministic iteration order.
-    private final Set<UUID> immunePlayers = new LinkedHashSet<>();
+    // clears membership. This set is concurrent because PlaceholderAPI may read it asynchronously.
+    private final Set<UUID> immunePlayers = ConcurrentHashMap.newKeySet();
     private final Map<UUID, BossBar> immunityBossBars = new HashMap<>();
-    private final Map<UUID, Long> immunityEndTime = new HashMap<>();
+    private final Map<UUID, Long> immunityEndTime = new ConcurrentHashMap<>();
     private final Map<UUID, Double> originalHealth = new HashMap<>();
     private final Map<UUID, BukkitTask> scheduledTasks = new HashMap<>();
     private final long IMMUNITY_DURATION_TICKS = 10 * 60 * 20L;
@@ -85,6 +86,8 @@ public class ImmunityManager {
             try { dataFile.createNewFile(); } catch (IOException e) { e.printStackTrace(); }
         }
         dataConfig = YamlConfiguration.loadConfiguration(dataFile);
+        dataWriter = new AtomicYamlWriter(dataFile.toPath(), exception ->
+                plugin.getLogger().severe("Could not save data.yml: " + exception.getMessage()));
 
         loadImmunityData();
     }
@@ -147,7 +150,7 @@ public class ImmunityManager {
 
     public void save() {
         // CRITICAL FIX: Add null safety checks
-        if (dataConfig == null || dataFile == null) {
+        if (dataConfig == null || dataFile == null || dataWriter == null) {
             plugin.getLogger().warning("Cannot save immunity data - data files not initialized");
             return;
         }
@@ -168,7 +171,11 @@ public class ImmunityManager {
                 dataConfig.set(path + ".originalHealth", storedHealth);
             }
         }
-        try { dataConfig.save(dataFile); } catch (IOException e) { e.printStackTrace(); }
+        try {
+            dataWriter.write(dataConfig.saveToString());
+        } catch (RuntimeException exception) {
+            plugin.getLogger().severe("Could not serialize data.yml: " + exception.getMessage());
+        }
     }
 
     // === REPEATING TASKS ===
@@ -293,10 +300,7 @@ public class ImmunityManager {
         cleanUpPlayerState(player);
         player.sendMessage(messageManager.get(expiredMessageKey));
 
-        if (dataConfig != null && dataFile != null) {
-            dataConfig.set("player-immunity." + uuid.toString(), null);
-            try { dataConfig.save(dataFile); } catch (IOException e) {}
-        }
+        save();
     }
 
     private void scheduleImmunityRemoval(Player player, long durationTicks) {
@@ -364,8 +368,7 @@ public class ImmunityManager {
                 player.getAttribute(AttributeResolver.MAX_HEALTH).setBaseValue(storedOriginalHealth);
                 player.setHealth(Math.min(player.getHealth(), storedOriginalHealth));
                 cleanUpPlayerState(player);
-                dataConfig.set("player-immunity." + uuid.toString(), null);
-                try { dataConfig.save(dataFile); } catch (IOException e) {}
+                save();
             }
         }
     }
@@ -490,13 +493,12 @@ public class ImmunityManager {
             player.setHealth(Math.min(player.getHealth(), maxHealth));
         }
 
-        immunePlayers.add(uuid);
-
         // BUGFIX: was player.getWorld().getFullTime() + IMMUNITY_DURATION_TICKS — world full-time
         // is warped by world.setTime() calls in the blood moon system (forced/natural start, stop,
         // and the night-time correction), which is what made this timer freeze or jump.
         long endTime = System.currentTimeMillis() + IMMUNITY_DURATION_MILLIS;
         immunityEndTime.put(uuid, endTime);
+        immunePlayers.add(uuid);
 
         BossBar bar = Bukkit.createBossBar(
                 messageManager.get("immunity.bossbar", "10:00"),
@@ -568,5 +570,9 @@ public class ImmunityManager {
         for (BossBar bar : immunityBossBars.values()) {
             bar.removeAll();
         }
+    }
+
+    public void close() {
+        if (dataWriter != null) dataWriter.close();
     }
 }

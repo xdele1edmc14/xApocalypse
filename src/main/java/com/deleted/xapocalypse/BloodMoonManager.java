@@ -73,6 +73,7 @@ public class BloodMoonManager {
     private long persistedBloodMoonDay = -1;
     private UUID bloodMoonWorldId = null;
     private int missingReferenceWorldChecks = 0;
+    private volatile int cachedDaysUntilNextBloodMoon = 0;
 
     // Pre-blood-moon warning dedupe: the day number the warning last broadcast on.
     // Persisted in BloodMoonData.yml so a same-day restart doesn't re-broadcast.
@@ -81,6 +82,7 @@ public class BloodMoonManager {
     // CRITICAL FIX: Separate blood moon data file
     private File bloodMoonDataFile;
     private FileConfiguration bloodMoonDataConfig;
+    private AtomicYamlWriter bloodMoonDataWriter;
 
     public BloodMoonManager(xApocalypse plugin) {
         this.plugin = plugin;
@@ -101,6 +103,8 @@ public class BloodMoonManager {
             }
         }
         bloodMoonDataConfig = YamlConfiguration.loadConfiguration(bloodMoonDataFile);
+        bloodMoonDataWriter = new AtomicYamlWriter(bloodMoonDataFile.toPath(), exception ->
+                plugin.getLogger().severe("Could not save BloodMoonData.yml: " + exception.getMessage()));
 
         // CRITICAL FIX: Load blood moon persistence data BEFORE config values
         loadBloodMoonData();
@@ -208,7 +212,7 @@ public class BloodMoonManager {
 
     // CRITICAL FIX: blood moon data saving method
     public void save() {
-        if (bloodMoonDataConfig == null || bloodMoonDataFile == null) {
+        if (bloodMoonDataConfig == null || bloodMoonDataFile == null || bloodMoonDataWriter == null) {
             plugin.getLogger().warning("Cannot save blood moon data - blood moon data files not initialized");
             return;
         }
@@ -223,12 +227,16 @@ public class BloodMoonManager {
             bloodMoonDataConfig.set("bloodmoon.world-id",
                     bloodMoonWorldId == null ? null : bloodMoonWorldId.toString());
             bloodMoonDataConfig.set("bloodmoon.last-warned-day", lastWarnedDay);
-            bloodMoonDataConfig.save(bloodMoonDataFile);
+            bloodMoonDataWriter.write(bloodMoonDataConfig.saveToString());
 
             plugin.debugLog("Saved blood moon data to BloodMoonData.yml: active=" + bloodMoonPersisted + ", day=" + persistedBloodMoonDay + ", forced=" + forcedBloodMoon);
-        } catch (IOException e) {
-            plugin.getLogger().severe("Could not save BloodMoonData.yml: " + e.getMessage());
+        } catch (RuntimeException e) {
+            plugin.getLogger().severe("Could not serialize BloodMoonData.yml: " + e.getMessage());
         }
+    }
+
+    public void close() {
+        if (bloodMoonDataWriter != null) bloodMoonDataWriter.close();
     }
 
     // === STATE QUERIES ===
@@ -304,6 +312,16 @@ public class BloodMoonManager {
         return isDayOf && isNight;
     }
 
+    static long remainingBloodMoonTicks(boolean forced, long durationTicks, long worldTime,
+                                        long forcedStartTimeMillis, long currentTimeMillis) {
+        if (!forced) {
+            return 13_000L + durationTicks - worldTime;
+        }
+
+        long elapsedMillis = Math.max(0L, currentTimeMillis - forcedStartTimeMillis);
+        return durationTicks - elapsedMillis / 50L;
+    }
+
     public double getHordeMultiplier() {
         return bmHordeMult;
     }
@@ -337,6 +355,11 @@ public class BloodMoonManager {
         return (int) (bloodMoonInterval - remainder);
     }
 
+    /** Async-safe snapshot for PlaceholderAPI; refreshed only by the synchronous lifecycle task. */
+    public int getCachedDaysUntilNextBloodMoon() {
+        return cachedDaysUntilNextBloodMoon;
+    }
+
     public boolean isPersisted() {
         return bloodMoonPersisted;
     }
@@ -360,10 +383,12 @@ public class BloodMoonManager {
             bloodMoonBar.removeAll();
         }
         bloodMoonBar = Bukkit.createBossBar("Blood Moon", BarColor.RED, BarStyle.SEGMENTED_10);
+        cachedDaysUntilNextBloodMoon = getDaysUntilNextBloodMoon();
 
         new BukkitRunnable() {
             @Override
             public void run() {
+                cachedDaysUntilNextBloodMoon = getDaysUntilNextBloodMoon();
                 if (Bukkit.getWorlds().isEmpty()) return;
                 if (!bloodMoonEnabled) {
                     if (bloodMoonPersisted || forcedBloodMoon) {
@@ -467,9 +492,13 @@ public class BloodMoonManager {
                     // CRITICAL FIX: Use actual command duration, not config default
                     long actualDuration = forcedBloodMoonDuration != -1 ? forcedBloodMoonDuration : bloodMoonForceDuration;
                     long durationTicks = forcedBloodMoon ? actualDuration * 60 * 20L : 10_000L;
-                    long bloodMoonStartTick = 13000;
-                    long bloodMoonEndTick = bloodMoonStartTick + durationTicks;
-                    long remaining = bloodMoonEndTick - time;
+                    long remaining = remainingBloodMoonTicks(
+                            forcedBloodMoon,
+                            durationTicks,
+                            time,
+                            forcedBloodMoonStartTime,
+                            System.currentTimeMillis()
+                    );
 
                     if (remaining > 0) {
                         // CRITICAL FIX: Calculate progress for forced blood moon using real time

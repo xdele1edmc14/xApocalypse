@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/badge/Java-25-orange?style=for-the-badge&logo=openjdk"/>
   <img src="https://img.shields.io/badge/Paper-26.2-red?style=for-the-badge&logo=spigotmc"/>
   <img src="https://img.shields.io/badge/License-GPLv3-yellow?style=for-the-badge"/>
-  <img src="https://img.shields.io/badge/Version-1.6.1-brightgreen?style=for-the-badge"/>
+  <img src="https://img.shields.io/badge/Version-1.6.2-brightgreen?style=for-the-badge"/>
 </p>
 
 <p align="center">
@@ -208,7 +208,7 @@ mythicmobs:
 * **Java:** **25+**
 * **Soft dependencies (optional):** [GriefPrevention](https://www.spigotmc.org/resources/griefprevention.1884/), [MythicMobs](https://www.spigotmc.org/resources/mythicmobs.5702/), [PlaceholderAPI](https://www.spigotmc.org/resources/placeholderapi.6245/)
 
-1. Drop `xApocalypse-1.6.1.jar` into your server's `plugins/` folder.
+1. Drop `xApocalypse-1.6.2.jar` into your server's `plugins/` folder.
 2. Start the server once to generate `config.yml` and `messages.yml`.
 3. Edit the configs to taste and run `/xa reload`.
 

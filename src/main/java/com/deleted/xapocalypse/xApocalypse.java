@@ -203,6 +203,13 @@ public class xApocalypse extends JavaPlugin {
         }
 
         Bukkit.getScheduler().cancelTasks(this);
+
+        if (immunity != null) {
+            immunity.close();
+        }
+        if (bloodMoon != null) {
+            bloodMoon.close();
+        }
     }
 
     // ==================================================================================

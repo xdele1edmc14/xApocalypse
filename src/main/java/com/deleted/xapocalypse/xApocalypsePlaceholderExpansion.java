@@ -39,7 +39,7 @@ public final class xApocalypsePlaceholderExpansion extends PlaceholderExpansion 
     public @Nullable String onRequest(OfflinePlayer player, @NotNull String params) {
         return switch (params.toLowerCase(Locale.ROOT)) {
             case "bloodmoon_days_left" -> formatBloodMoonDays(
-                    plugin.getBloodMoon().getDaysUntilNextBloodMoon());
+                    plugin.getBloodMoon().getCachedDaysUntilNextBloodMoon());
             case "zombie_guts_duration" -> player == null ? "0" : Long.toString(
                     plugin.getImmunity().getRemainingSeconds(player.getUniqueId()));
             case "current_scent" -> player == null ? "0" : formatScent(

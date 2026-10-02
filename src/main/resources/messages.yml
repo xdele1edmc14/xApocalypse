@@ -1,4 +1,4 @@
-# xApocalypse v1.6.1 - Localization File
+# xApocalypse v1.6.2 - Localization File
 # SUPPORTS BOTH FORMATS:
 # - MiniMessage: <gradient:red:blue>Text</gradient>, <rainbow>Text</rainbow>, <#FF5555>Hex</#FF5555>
 # - Legacy: &a, &b, &l, &n, §c, etc.
@@ -15,7 +15,7 @@ player-not-found: "&cPlayer not found: {0}"
 commands:
   unknown: "&cUnknown sub-command: &f{0}&c. Try &f/xa help&c."
   help:
-    title: "&8&m       &r &c&lxApocalypse &r&7v1.6.1 &8&m       "
+    title: "&8&m       &r &c&lxApocalypse &r&7v1.6.2 &8&m       "
     author: "&7Created by &fxDele1ed"
     help: "&c/xa help &8» &7Show this command list"
     spawn: "&c/xa spawn <type|horde> [count] [radius] &8» &7Spawn zombies"

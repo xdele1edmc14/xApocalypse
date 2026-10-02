@@ -2,6 +2,17 @@
 
 All notable changes to xApocalypse are documented here.
 
+## [1.6.2] - 2026-10-02
+
+### Fixed
+
+- Prevented Nurse zombies from healing invalid, dead, or zero-health zombies during their death sequence, fixing permanently red, tilted, unkillable bodies.
+- Rate-limited Nurse radius scans even when no target is healed.
+- Made PlaceholderAPI Blood Moon reads use a synchronous cached snapshot and moved placeholder-visible scent and immunity state to concurrent collections.
+- Replaced gameplay-thread immunity and Blood Moon YAML writes with ordered background writes that atomically replace their target files and flush during shutdown.
+- Kept forced Blood Moons active across restarts by calculating their remaining duration from the persisted wall-clock start time instead of the current in-game night time.
+- Configured Mockito as a Java agent for stable Java 25 test runs.
+
 ## [1.6.1] - 2026-09-06
 
 ### Fixed

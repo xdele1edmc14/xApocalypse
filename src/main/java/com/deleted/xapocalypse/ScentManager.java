@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Owns the Scent subsystem: per-player scent accumulation, the decay + continuous-sprint
@@ -22,7 +23,7 @@ public class ScentManager {
 
     private final xApocalypse plugin;
 
-    private final Map<UUID, Double> playerScent = new HashMap<>();
+    private final Map<UUID, Double> playerScent = new ConcurrentHashMap<>();
     private final Map<UUID, Long> lastJumpTime = new HashMap<>();
     // Bug C4 fix: previous-tick ground state so onMove can detect the on-ground -> airborne jump edge
     private final Map<UUID, Boolean> playerWasOnGround = new HashMap<>();

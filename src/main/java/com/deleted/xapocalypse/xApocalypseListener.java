@@ -152,8 +152,6 @@ public class xApocalypseListener implements Listener {
         bloodMoon.onPlayerQuit(player);
 
         scent.onPlayerQuit(uuid);
-
-        immunity.save();
     }
 
     // === ENTITY EVENTS ===

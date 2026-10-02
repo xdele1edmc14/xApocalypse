@@ -11,15 +11,19 @@ import org.bukkit.entity.LlamaSpit;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Zombie;
 import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.util.Vector;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -28,8 +32,11 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -156,6 +163,53 @@ class SpecialZombieBehaviorTest {
         verify(victim).damage(2.0, attacker);
     }
 
+    @ParameterizedTest
+    @CsvSource({
+            "false, false, 5.0",
+            "true, true, 5.0",
+            "true, false, 0.0"
+    })
+    void nurseDoesNotHealZombieWhoseDeathSequenceHasStarted(
+            boolean valid, boolean dead, double health) throws Exception {
+        Zombie nurse = mock(Zombie.class);
+        Zombie dyingZombie = mock(Zombie.class);
+        PersistentDataContainer nurseData = mock(PersistentDataContainer.class);
+
+        when(nurse.getPersistentDataContainer()).thenReturn(nurseData);
+        when(nurse.getNearbyEntities(anyDouble(), anyDouble(), anyDouble()))
+                .thenReturn(List.of(dyingZombie));
+        when(dyingZombie.isValid()).thenReturn(valid);
+        when(dyingZombie.isDead()).thenReturn(dead);
+        when(dyingZombie.getHealth()).thenReturn(health);
+
+        assertDoesNotThrow(() -> tickStrict("tickNurseAI", nurse));
+
+        verify(dyingZombie, never()).setHealth(anyDouble());
+    }
+
+    @Test
+    void nurseRateLimitsEmptyNearbyScans() throws Exception {
+        Zombie nurse = mock(Zombie.class);
+        PersistentDataContainer nurseData = mock(PersistentDataContainer.class);
+        AtomicReference<Long> lastScan = new AtomicReference<>();
+        setField("nurseIntervalMs", 60_000L);
+
+        when(nurse.getPersistentDataContainer()).thenReturn(nurseData);
+        when(nurseData.get(xApocalypseUtils.LAST_HEAL_KEY, PersistentDataType.LONG))
+                .thenAnswer(i -> lastScan.get());
+        doAnswer(i -> {
+            lastScan.set(i.getArgument(2, Long.class));
+            return null;
+        }).when(nurseData).set(
+                eq(xApocalypseUtils.LAST_HEAL_KEY), eq(PersistentDataType.LONG), anyLong());
+        when(nurse.getNearbyEntities(anyDouble(), anyDouble(), anyDouble())).thenReturn(List.of());
+
+        tickStrict("tickNurseAI", nurse);
+        tickStrict("tickNurseAI", nurse);
+
+        verify(nurse, times(1)).getNearbyEntities(anyDouble(), anyDouble(), anyDouble());
+    }
+
     private Zombie minerAt(World world, double x, double y, double z) {
         Zombie miner = mock(Zombie.class);
         PersistentDataContainer data = mock(PersistentDataContainer.class);
@@ -213,5 +267,11 @@ class SpecialZombieBehaviorTest {
             // block/projectile action happens first, which is the behavior these unit tests cover.
             if (!(exception.getCause() instanceof LinkageError)) throw exception;
         }
+    }
+
+    private void tickStrict(String name, Zombie zombie) throws Exception {
+        Method method = xApocalypseUtils.class.getDeclaredMethod(name, Zombie.class);
+        method.setAccessible(true);
+        method.invoke(utils, zombie);
     }
 }
