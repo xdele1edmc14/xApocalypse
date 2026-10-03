@@ -21,7 +21,7 @@ This page covers everything you need to get xApocalypse running on your server.
 
 ## Installation
 
-1. Download or build `xApocalypse-1.6.2.jar` (see [Building from Source](#building-from-source)).
+1. Download or build `xApocalypse-1.6.3.jar` (see [Building from Source](#building-from-source)).
 2. Place the jar in your server's `plugins/` directory.
 3. **Start the server once.** This generates the default configuration files.
 4. Stop the server, edit the configs to taste (see the [Configuration Reference](Configuration-Reference.md)), and start again.
@@ -66,7 +66,7 @@ The project uses Maven:
 mvn clean package
 ```
 
-The compiled jar is written to `target/xApocalypse-1.6.2.jar`.
+The compiled jar is written to `target/xApocalypse-1.6.3.jar`.
 
 ---
 

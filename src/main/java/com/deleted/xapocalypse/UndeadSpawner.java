@@ -44,6 +44,10 @@ public final class UndeadSpawner {
         this.utils = utils;
     }
 
+    int getRemainingAnimationCapacity() {
+        return Math.max(0, MAX_CONCURRENT_ANIMATIONS - activeAnimationEntities.size());
+    }
+
     public Zombie trySpawnUndeadRise(Location surface, Block surfaceBlock, BlockData surfaceData, long startDelayTicks) {
         if (surface == null || surfaceBlock == null || surfaceData == null) return null;
 
@@ -224,6 +228,7 @@ public final class UndeadSpawner {
 
         int x = target.getBlockX();
         int z = target.getBlockZ();
+        if (!world.isChunkLoaded(x >> 4, z >> 4)) return null;
 
         // In normal/custom terrain worlds, only accept the exposed terrain surface. The previous
         // +/- 48 block scan kept descending whenever the top block was unsuitable (water, dense

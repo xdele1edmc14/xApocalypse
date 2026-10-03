@@ -4,10 +4,13 @@ import io.lumine.mythic.api.mobs.MythicMob;
 import io.lumine.mythic.bukkit.BukkitAPIHelper;
 import io.lumine.mythic.bukkit.MythicBukkit;
 import io.lumine.mythic.core.mobs.ActiveMob;
+import java.util.ArrayList;
+import java.util.ArrayDeque;
+import java.util.Collections;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -26,6 +29,8 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
 public class MythicMobsManager {
+    private static final int MAX_PLACEMENT_PROBES_PER_SEARCH = 8;
+    private static final int CLEANUP_BATCH_SIZE = 10;
     private static final NamespacedKey MYTHIC_ENTITY_KEY =
             new NamespacedKey("xapocalypse", "mythic_entity");
     private static final NamespacedKey BLOOD_MOON_MUTANT_KEY =
@@ -76,7 +81,7 @@ public class MythicMobsManager {
         this.spawnRadiusMin = Math.max(1, cfg.getInt("mythicmobs.integration.spawn-radius.min", 20));
         this.spawnRadiusMax = Math.max(this.spawnRadiusMin + 1,
                 cfg.getInt("mythicmobs.integration.spawn-radius.max", 40));
-        this.spawnTickInterval = Math.max(1,
+        this.spawnTickInterval = Math.max(20,
                 cfg.getInt("mythicmobs.integration.spawn-tick-interval", 100));
         this.spawnSoundEnabled = cfg.getBoolean("mythicmobs.integration.spawn-sound.enabled", true);
         this.spawnSoundVolume = Math.max(0.0f,
@@ -157,26 +162,39 @@ public class MythicMobsManager {
 
     /** Removes loaded Blood-Moon Mutants and retains unloaded UUIDs for deferred chunk cleanup. */
     public int despawnActiveMutants() {
-        int removed = 0;
-        Iterator<UUID> iterator = this.activeMutants.iterator();
-        while (iterator.hasNext()) {
-            UUID uuid = iterator.next();
-            Entity entity = Bukkit.getEntity(uuid);
-            if (entity == null) continue;
-            if (entity.isDead()) {
-                iterator.remove();
-                continue;
+        Queue<UUID> pending = new ArrayDeque<>(this.activeMutants);
+        int queued = pending.size();
+        scheduleMutantCleanup(pending, new int[]{0});
+        return queued;
+    }
+
+    private void scheduleMutantCleanup(Queue<UUID> pending, int[] removed) {
+        if (pending.isEmpty() || !plugin.isEnabled()) {
+            if (removed[0] > 0) {
+                plugin.debugLog("[MythicMobs] Blood moon ended — despawned "
+                        + removed[0] + " Mutant(s).");
             }
-            if (entity.getPersistentDataContainer().has(BLOOD_MOON_MUTANT_KEY, PersistentDataType.BYTE)) {
+            return;
+        }
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (!plugin.isEnabled()) return;
+            for (int processed = 0;
+                    processed < CLEANUP_BATCH_SIZE && !pending.isEmpty(); processed++) {
+                UUID uuid = pending.remove();
+                Entity entity = Bukkit.getEntity(uuid);
+                if (entity == null) continue;
+                if (entity.isDead()) {
+                    activeMutants.remove(uuid);
+                    continue;
+                }
+                if (!entity.getPersistentDataContainer().has(
+                        BLOOD_MOON_MUTANT_KEY, PersistentDataType.BYTE)) continue;
                 entity.remove();
-                iterator.remove();
-                removed++;
+                activeMutants.remove(uuid);
+                removed[0]++;
             }
-        }
-        if (removed > 0) {
-            this.plugin.debugLog("[MythicMobs] Blood moon ended — despawned " + removed + " Mutant(s).");
-        }
-        return removed;
+            scheduleMutantCleanup(pending, removed);
+        });
     }
 
     /**
@@ -279,20 +297,22 @@ public class MythicMobsManager {
                 MythicMobsManager.this.bloodMoonMissCount = 0; // clear on a successful check
                 MythicMobsManager.this.pruneDeadMutants();
                 if (MythicMobsManager.this.activeMutants.size() < MythicMobsManager.this.maxGlobalCap || MythicMobsManager.this.maxGlobalCap <= 0) {
-                    for(Player player : Bukkit.getOnlinePlayers()) {
+                    List<Player> players = new ArrayList<>();
+                    for (Player player : Bukkit.getOnlinePlayers()) {
                         if (MythicMobsManager.this.plugin.isWorldEnabled(player.getWorld())
                                 && !MythicMobsManager.this.plugin.isLobbyWorld(player.getWorld())) {
-                            if (MythicMobsManager.this.activeMutants.size() >= MythicMobsManager.this.maxGlobalCap && MythicMobsManager.this.maxGlobalCap > 0) {
-                                break;
-                            }
-
-                            if (ThreadLocalRandom.current().nextDouble() < MythicMobsManager.this.spawnChance) {
-                                Location loc = MythicMobsManager.this.findSpawnLocation(player.getLocation(), MythicMobsManager.this.spawnRadiusMin, MythicMobsManager.this.spawnRadiusMax, true);
-                                if (loc != null) {
-                                    MythicMobsManager.this.spawnMythicMob(loc, true);
-                                }
-                            }
+                            players.add(player);
                         }
+                    }
+                    Collections.shuffle(players);
+                    for (Player player : players) {
+                        if (ThreadLocalRandom.current().nextDouble()
+                                >= MythicMobsManager.this.spawnChance) continue;
+                        Location loc = MythicMobsManager.this.findSpawnLocation(
+                                player.getLocation(), MythicMobsManager.this.spawnRadiusMin,
+                                MythicMobsManager.this.spawnRadiusMax, true);
+                        if (loc != null) MythicMobsManager.this.spawnMythicMob(loc, true);
+                        return;
                     }
 
                 }
@@ -310,8 +330,8 @@ public class MythicMobsManager {
 
     private Entity spawnMythicMob(Location loc, boolean bloodMoonSpawn) {
         if (!this.mythicMobsEnabled || this.mmAPI == null) return null;
+        if (!isChunkLoaded(loc)) return null;
 
-        loc = this.snapToGround(loc);
         if (loc == null) {
             return null;
         } else {
@@ -344,16 +364,18 @@ public class MythicMobsManager {
         Player nearestPlayer = this.getNearestPlayer(anchor);
         ThreadLocalRandom rng = ThreadLocalRandom.current();
 
-        for(int attempt = 0; attempt < 15; ++attempt) {
+        for(int attempt = 0; attempt < MAX_PLACEMENT_PROBES_PER_SEARCH; ++attempt) {
             double angle = rng.nextDouble((double)0.0F, (Math.PI * 2D));
             double dist = rng.nextDouble((double)minRadius, (double)maxRadius);
             double x = anchor.getX() + Math.cos(angle) * dist;
             double z = anchor.getZ() + Math.sin(angle) * dist;
             Location candidate = new Location(anchor.getWorld(), x, anchor.getY(), z);
+            if (!isChunkLoaded(candidate)) continue;
             candidate = this.snapToGround(candidate);
             boolean blockedByClaim = candidate != null && avoidClaims && this.plugin.isInsideClaim(candidate);
             if (candidate != null && !blockedByClaim
-                    && (nearestPlayer == null || !this.hasLineOfSight(nearestPlayer, candidate) || attempt >= 10)) {
+                    && (nearestPlayer == null || !this.hasLineOfSight(nearestPlayer, candidate)
+                    || attempt == MAX_PLACEMENT_PROBES_PER_SEARCH - 1)) {
                 return candidate;
             }
         }
@@ -385,7 +407,14 @@ public class MythicMobsManager {
 
     private Location snapToGround(Location loc) {
         if (loc == null || this.plugin.getUndeadSpawner() == null) return null;
+        if (!isChunkLoaded(loc)) return null;
         return this.plugin.getUndeadSpawner().getSurfaceSpawnLocation(loc);
+    }
+
+    private boolean isChunkLoaded(Location location) {
+        if (location == null || location.getWorld() == null) return false;
+        return location.getWorld().isChunkLoaded(
+                location.getBlockX() >> 4, location.getBlockZ() >> 4);
     }
 
     private boolean hasLineOfSight(Player player, Location target) {

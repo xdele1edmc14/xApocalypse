@@ -26,12 +26,15 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 public class HordeManager {
 
+    private static final int MAX_TERRAIN_PROBES_PER_CYCLE = 10;
+
     private final xApocalypse plugin;
     private final xApocalypseUtils utils;
     private final UndeadSpawner undeadSpawner;
 
     // Bug 4 & 20 fix: flag so onEntitySpawn bypasses the mob-list check for plugin-spawned entities
     private boolean isPluginSpawning = false;
+    private int remainingTerrainProbes = MAX_TERRAIN_PROBES_PER_CYCLE;
 
     public HordeManager(xApocalypse plugin, xApocalypseUtils utils, UndeadSpawner undeadSpawner) {
         this.plugin = plugin;
@@ -46,6 +49,10 @@ public class HordeManager {
 
     public boolean isPluginSpawning() {
         return isPluginSpawning;
+    }
+
+    void beginSpawnCycle() {
+        remainingTerrainProbes = MAX_TERRAIN_PROBES_PER_CYCLE;
     }
 
     // === AI TICK SYSTEM ===
@@ -125,31 +132,40 @@ public class HordeManager {
         int availableSlots = Math.max(0, spawnCap - existingZombies);
         finalHordeSize = Math.min(finalHordeSize, availableSlots);
 
+        boolean risingAnimation = plugin.getConfig().getBoolean(
+                "apocalypse-settings.rising-animation", true);
+        if (risingAnimation) {
+            finalHordeSize = Math.min(finalHordeSize,
+                    undeadSpawner.getRemainingAnimationCapacity());
+        }
+        if (finalHordeSize <= 0 || remainingTerrainProbes <= 0) return;
+
         plugin.debugLog("Attempting to spawn horde of size: " + finalHordeSize + " near " + player.getName() + " (Multiplier: " + multiplier + ")");
 
         int spawnRadius = Math.max(1,
                 plugin.getConfig().getInt("apocalypse-settings.spawn-radius", 35));
 
+        Location center = player.getLocation();
         int spawned = 0;
         int noSurface = 0;
         int claimed = 0;
         int spawnRejected = 0;
-        for (int i = 0; i < finalHordeSize; i++) {
+        for (int i = 0; i < finalHordeSize && remainingTerrainProbes > 0; i++) {
             double xOffset = ThreadLocalRandom.current().nextDouble(-spawnRadius, spawnRadius);
             double zOffset = ThreadLocalRandom.current().nextDouble(-spawnRadius, spawnRadius);
-            Location spawnLoc = player.getLocation().clone().add(xOffset, 0, zOffset);
+            Location spawnLoc = center.clone().add(xOffset, 0, zOffset);
 
-            Location surface = undeadSpawner.getSurfaceSpawnLocation(spawnLoc);
+            Location surface = probeSurface(spawnLoc);
 
             boolean insideClaim = surface != null && plugin.isInsideClaim(surface);
 
             // Retry once with a fresh random offset before giving up — reduces wasted
             // attempts near water, ravines, claims, or ocean biomes.
-            if (surface == null || insideClaim) {
+            if ((surface == null || insideClaim) && remainingTerrainProbes > 0) {
                 xOffset = ThreadLocalRandom.current().nextDouble(-spawnRadius, spawnRadius);
                 zOffset = ThreadLocalRandom.current().nextDouble(-spawnRadius, spawnRadius);
-                spawnLoc = player.getLocation().clone().add(xOffset, 0, zOffset);
-                surface = undeadSpawner.getSurfaceSpawnLocation(spawnLoc);
+                spawnLoc = center.clone().add(xOffset, 0, zOffset);
+                surface = probeSurface(spawnLoc);
                 insideClaim = surface != null && plugin.isInsideClaim(surface);
             }
 
@@ -164,8 +180,6 @@ public class HordeManager {
 
             Block surfaceBlock = surface.getBlock().getRelative(BlockFace.DOWN);
             BlockData surfaceData = surfaceBlock.getBlockData();
-
-            boolean risingAnimation = plugin.getConfig().getBoolean("apocalypse-settings.rising-animation", true);
 
             if (risingAnimation) {
                 long startDelayTicks = i % 5L;
@@ -196,5 +210,11 @@ public class HordeManager {
                     + " spawned (no surface: " + noSurface + ", claimed: " + claimed
                     + ", spawn rejected: " + spawnRejected + ")");
         }
+    }
+
+    private Location probeSurface(Location candidate) {
+        if (remainingTerrainProbes <= 0) return null;
+        remainingTerrainProbes--;
+        return undeadSpawner.getSurfaceSpawnLocation(candidate);
     }
 }

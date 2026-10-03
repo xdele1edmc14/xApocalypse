@@ -16,8 +16,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayDeque;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
 
@@ -35,6 +38,8 @@ import java.util.UUID;
  * Events live in {@link xApocalypseListener}; commands in {@link xApocalypseCommand}.
  */
 public class xApocalypse extends JavaPlugin {
+
+    private static final int CHUNK_CLEANUP_BATCH_SIZE = 8;
 
     // --- MANAGERS ---
     private xApocalypseUtils utils;
@@ -276,12 +281,37 @@ public class xApocalypse extends JavaPlugin {
 
     private void cleanupExpiredBloodMoonEntitiesInLoadedChunks() {
         if (!getConfig().getBoolean("bloodmoon.despawn-on-end", true)) return;
+        Set<ChunkReference> uniqueChunks = new LinkedHashSet<>();
         for (World world : Bukkit.getWorlds()) {
             for (org.bukkit.Chunk chunk : world.getLoadedChunks()) {
-                utils.cleanupExpiredBloodMoonZombies(chunk);
-                mythicMobsManager.cleanupExpiredBloodMoonMutants(chunk);
+                uniqueChunks.add(new ChunkReference(
+                        world.getUID(), chunk.getX(), chunk.getZ()));
             }
         }
+        scheduleChunkCleanup(new ArrayDeque<>(uniqueChunks));
+    }
+
+    private void scheduleChunkCleanup(Queue<ChunkReference> remaining) {
+        if (remaining.isEmpty() || !isEnabled()) return;
+        Bukkit.getScheduler().runTask(this, () -> {
+            if (!isEnabled()) return;
+            for (int processed = 0;
+                    processed < CHUNK_CLEANUP_BATCH_SIZE && !remaining.isEmpty();
+                    processed++) {
+                ChunkReference reference = remaining.remove();
+                World world = Bukkit.getWorld(reference.worldId());
+                if (world == null || !world.isChunkLoaded(reference.x(), reference.z())) continue;
+                org.bukkit.Chunk chunk = world.getChunkAt(reference.x(), reference.z());
+                if (utils != null) utils.cleanupExpiredBloodMoonZombies(chunk);
+                if (mythicMobsManager != null) {
+                    mythicMobsManager.cleanupExpiredBloodMoonMutants(chunk);
+                }
+            }
+            scheduleChunkCleanup(remaining);
+        });
+    }
+
+    private record ChunkReference(UUID worldId, int x, int z) {
     }
 
     // ==================================================================================
@@ -460,6 +490,10 @@ public class xApocalypse extends JavaPlugin {
 
     void spawnZombiesNearPlayer(Player player, boolean isDayHordeSpawn) {
         horde.spawnZombiesNearPlayer(player, isDayHordeSpawn);
+    }
+
+    void beginHordeSpawnCycle() {
+        horde.beginSpawnCycle();
     }
 
     public double getPlayerScent(UUID uuid) {

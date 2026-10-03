@@ -5,6 +5,7 @@ import org.bukkit.attribute.Attribute;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.*;
+import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.potion.PotionEffect;
@@ -16,6 +17,8 @@ import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class xApocalypseUtils {
+
+    private static final int BLOOD_MOON_CLEANUP_BATCH_SIZE = 10;
 
     private final xApocalypse plugin;
 
@@ -553,6 +556,10 @@ public class xApocalypseUtils {
         if (isInsideClaim(b.getLocation())) return false;
 
         BlockData brokenData = b.getBlockData();
+        BlockData air = plugin.getServer().createBlockData(Material.AIR);
+        EntityChangeBlockEvent changeEvent = new EntityChangeBlockEvent(miner, b, air);
+        plugin.getServer().getPluginManager().callEvent(changeEvent);
+        if (changeEvent.isCancelled()) return false;
         if (minerDropItems) {
             b.breakNaturally();
         } else {
@@ -642,24 +649,51 @@ public class xApocalypseUtils {
      * removed. The entities are removed outright (no death drops), avoiding an end-of-event loot dump.
      */
     public int despawnBloodMoonZombies() {
-        int removed = 0;
+        Queue<UUID> pending = new ArrayDeque<>();
         for (org.bukkit.World world : Bukkit.getWorlds()) {
             if (!plugin.isWorldEnabled(world)) continue;
             for (Zombie zombie : world.getEntitiesByClass(Zombie.class)) {
                 if (!zombie.getPersistentDataContainer().has(BLOOD_MOON_KEY, PersistentDataType.BYTE)) continue;
-                // Cancel any pending burster fuse so its delayed explosion can't fire post-removal.
-                cancelBursterFuse(zombie);
-                Location loc = zombie.getLocation().add(0, 1, 0);
-                world.spawnParticle(Particle.SMOKE, loc, 12, 0.25, 0.4, 0.25, 0.02);
-                world.playSound(zombie.getLocation(), Sound.ENTITY_ZOMBIE_DEATH, 0.6f, 0.7f);
-                zombie.remove();
-                removed++;
+                pending.add(zombie.getUniqueId());
             }
         }
-        if (removed > 0) {
-            plugin.debugLog("Blood moon ended — despawned " + removed + " blood-moon zombie(s).");
+        int queued = pending.size();
+        scheduleBloodMoonZombieCleanup(pending, new int[]{0});
+        return queued;
+    }
+
+    private void scheduleBloodMoonZombieCleanup(Queue<UUID> pending, int[] removed) {
+        if (pending.isEmpty() || !plugin.isEnabled()) {
+            if (removed[0] > 0) {
+                plugin.debugLog("Blood moon ended — despawned " + removed[0]
+                        + " blood-moon zombie(s).");
+            }
+            return;
         }
-        return removed;
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (!plugin.isEnabled()) return;
+            for (int processed = 0;
+                    processed < BLOOD_MOON_CLEANUP_BATCH_SIZE && !pending.isEmpty();
+                    processed++) {
+                Entity entity = Bukkit.getEntity(pending.remove());
+                if (!(entity instanceof Zombie zombie)) continue;
+                if (!zombie.getPersistentDataContainer().has(
+                        BLOOD_MOON_KEY, PersistentDataType.BYTE)) continue;
+                cancelBursterFuse(zombie);
+                Location location = zombie.getLocation();
+                World world = zombie.getWorld();
+                zombie.remove();
+                removed[0]++;
+                try {
+                    world.spawnParticle(Particle.SMOKE, location.clone().add(0, 1, 0),
+                            12, 0.25, 0.4, 0.25, 0.02);
+                    world.playSound(location, Sound.ENTITY_ZOMBIE_DEATH, 0.6f, 0.7f);
+                } catch (LinkageError | RuntimeException ignored) {
+                    // Visual feedback is optional; cleanup must continue if a registry is unavailable.
+                }
+            }
+            scheduleBloodMoonZombieCleanup(pending, removed);
+        });
     }
 
     /**

@@ -117,6 +117,7 @@ public class ImmunityManager {
                 // Always remember their original max health so onPlayerJoin can restore
                 // it even if immunity already expired while the server was offline.
                 originalHealth.put(uuid, originalHealthVal);
+                immunityEndTime.put(uuid, endTimeMillis);
 
                 long remainingMillis = endTimeMillis - now;
                 if (remainingMillis > IMMUNITY_DURATION_MILLIS) {
@@ -191,16 +192,27 @@ public class ImmunityManager {
                 // warped by world.setTime() calls (blood moon start/stop/correction), which
                 // froze or scrambled this check entirely. System time is unaffected by that.
                 long now = System.currentTimeMillis();
+                boolean retiredOfflineState = false;
 
                 for (UUID uuid : new ArrayList<>(immunePlayers)) {
-                    Player player = Bukkit.getPlayer(uuid);
-                    if (player == null || !player.isOnline()) continue;
-
                     Long endTime = immunityEndTime.get(uuid);
-                    if (endTime == null) continue;
+                    if (endTime == null) {
+                        immunePlayers.remove(uuid);
+                        continue;
+                    }
 
                     // Check if immunity has expired
                     if (now >= endTime) {
+                        Player player = Bukkit.getPlayer(uuid);
+                        if (player == null || !player.isOnline()) {
+                            immunePlayers.remove(uuid);
+                            BukkitTask task = scheduledTasks.remove(uuid);
+                            if (task != null) task.cancel();
+                            BossBar bar = immunityBossBars.remove(uuid);
+                            if (bar != null) bar.removeAll();
+                            retiredOfflineState = true;
+                            continue;
+                        }
                         plugin.debugLog("Immunity expired for player " + player.getName() + ", retargeting zombies");
 
                         // BUGFIX: this branch used to call cleanUpPlayerState() directly,
@@ -215,6 +227,7 @@ public class ImmunityManager {
                         retargetZombiesNearPlayer(player);
                     }
                 }
+                if (retiredOfflineState) save();
             }
         }.runTaskTimer(plugin, 20L, 20L); // Check every second
     }

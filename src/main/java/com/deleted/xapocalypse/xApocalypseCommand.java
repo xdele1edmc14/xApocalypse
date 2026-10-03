@@ -12,6 +12,7 @@ import org.bukkit.entity.Zombie;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.Arrays;
+import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -33,6 +34,8 @@ import java.util.concurrent.ThreadLocalRandom;
  * only the dispatch layer changed from {@code command.getName()} to {@code args[0]}.
  */
 public class xApocalypseCommand implements CommandExecutor {
+
+    private static final int ADMIN_SPAWN_ATTEMPTS_PER_TICK = 10;
 
     private final xApocalypse plugin;
     private final MessageManager messageManager;
@@ -261,7 +264,9 @@ public class xApocalypseCommand implements CommandExecutor {
             return true;
         }
 
-        count = Math.min(count, plugin.getConfig().getInt("performance.max-total-zombies", 300)); // Use config value
+        int maxZombies = Math.max(0,
+                plugin.getConfig().getInt("performance.max-total-zombies", 300));
+        count = Math.min(count, maxZombies);
         radius = Math.min(radius, 50); // Keep radius reasonable
 
         // --- MythicMobs: MUTANT type ---
@@ -277,45 +282,12 @@ public class xApocalypseCommand implements CommandExecutor {
             return true;
         }
 
+        int remainingCapacity = Math.max(0,
+                maxZombies - player.getWorld().getEntitiesByClass(Zombie.class).size());
+        count = Math.min(count, remainingCapacity);
+
         if (typeArg.equals("HORDE")) {
-            // Spawn mixed horde
-            int hordeSpawned = 0;
-            for (int i = 0; i < count; i++) {
-                Location spawnLoc = player.getLocation().add(
-                        ThreadLocalRandom.current().nextDouble(-radius, radius),
-                        0,
-                        ThreadLocalRandom.current().nextDouble(-radius, radius)
-                );
-
-                // Bug fix: do NOT skip claims here. The natural horde spawner ignores
-                // GriefPrevention claims entirely (zombies spawn inside claims normally), so
-                // gating the admin /xa spawn command on claims was inconsistent — and at a
-                // claimed hub/main-world spawn it skipped every attempt ("horde of 0").
-                // Bug M4 fix: snap to a valid surface instead of spawning at the player's raw
-                // Y. On non-flat terrain the old code buried/suffocated zombies inside hills or
-                // dropped them into the void. Skip the slot if no valid surface is found.
-                Location surface = undeadSpawner.getSurfaceSpawnLocation(spawnLoc);
-                if (surface == null) continue;
-
-                // Bug fix: admin /xa spawn must bypass the onEntitySpawn mob-list gate (same
-                // rationale as C1). Without the flag, an enabled world running a whitelist
-                // (or a blacklist that lists ZOMBIE) silently cancels the spawn — which is why
-                // /xa spawn worked in non-enabled worlds (nether/end) but not the main world.
-                // Because the gate is bypassed, onEntitySpawn no longer assigns a type, so we
-                // assign it here ourselves.
-                Zombie zombie;
-                plugin.setPluginSpawning(true);
-                try {
-                    zombie = (Zombie) player.getWorld().spawnEntity(surface, EntityType.ZOMBIE);
-                } finally {
-                    plugin.setPluginSpawning(false);
-                }
-                if (zombie != null) {
-                    utils.assignZombieType(zombie);
-                    hordeSpawned++;
-                }
-            }
-            sender.sendMessage("§aSpawned horde of " + hordeSpawned + " zombies!");
+            startBatchedAdminSpawn(player, null, count, radius);
             return true;
         }
 
@@ -328,36 +300,92 @@ public class xApocalypseCommand implements CommandExecutor {
             return true;
         }
 
-        int spawnedCount = 0;
-        for (int i = 0; i < count; i++) {
-            Location spawnLoc = player.getLocation().add(
-                    ThreadLocalRandom.current().nextDouble(-radius, radius),
-                    0,
-                    ThreadLocalRandom.current().nextDouble(-radius, radius)
-            );
+        startBatchedAdminSpawn(player, type, count, radius);
+        return true;
+    }
 
-            // Bug fix: snap to a valid surface (parity with the HORDE branch above) so specific-type
-            // spawns don't suffocate inside terrain or drop into the void at the player's raw Y.
-            Location surface = undeadSpawner.getSurfaceSpawnLocation(spawnLoc);
-            if (surface == null) continue;
+    private void startBatchedAdminSpawn(
+            Player player, xApocalypseUtils.ZombieType type, int requested, int radius) {
+        if (requested <= 0) {
+            player.sendMessage("§eZombie cap reached; nothing was spawned.");
+            return;
+        }
 
-            // Bug fix: bypass the onEntitySpawn mob-list gate for admin spawns, then apply the
-            // requested type directly.
-            Zombie zombie;
-            plugin.setPluginSpawning(true);
-            try {
-                zombie = (Zombie) player.getWorld().spawnEntity(surface, EntityType.ZOMBIE);
-            } finally {
-                plugin.setPluginSpawning(false);
+        AdminSpawnJob job = new AdminSpawnJob(player, type, requested, radius);
+        job.runBatch(player);
+        if (job.remaining > 0) {
+            job.scheduleNextBatch();
+            player.sendMessage("§aQueued " + requested + " zombies in safe 10-attempt batches.");
+        } else {
+            job.sendCompletion(player);
+        }
+    }
+
+    private final class AdminSpawnJob {
+        private final UUID playerId;
+        private final xApocalypseUtils.ZombieType type;
+        private final int radius;
+        private int remaining;
+        private int spawned;
+
+        private AdminSpawnJob(
+                Player player, xApocalypseUtils.ZombieType type, int requested, int radius) {
+            this.playerId = player.getUniqueId();
+            this.type = type;
+            this.remaining = requested;
+            this.radius = radius;
+        }
+
+        private void runBatch(Player player) {
+            int maxZombies = Math.max(0,
+                    plugin.getConfig().getInt("performance.max-total-zombies", 300));
+            int capacity = Math.max(0,
+                    maxZombies - player.getWorld().getEntitiesByClass(Zombie.class).size());
+            int attempts = Math.min(ADMIN_SPAWN_ATTEMPTS_PER_TICK,
+                    Math.min(remaining, capacity));
+            if (attempts <= 0) {
+                remaining = 0;
+                return;
             }
-            if (zombie != null) {
-                utils.applyZombieType(zombie, type);
-                spawnedCount++;
+
+            Location center = player.getLocation();
+            for (int i = 0; i < attempts; i++) {
+                remaining--;
+                Location candidate = center.clone().add(
+                        ThreadLocalRandom.current().nextDouble(-radius, radius), 0,
+                        ThreadLocalRandom.current().nextDouble(-radius, radius));
+                Location surface = undeadSpawner.getSurfaceSpawnLocation(candidate);
+                if (surface == null) continue;
+
+                Zombie zombie;
+                plugin.setPluginSpawning(true);
+                try {
+                    zombie = (Zombie) player.getWorld().spawnEntity(surface, EntityType.ZOMBIE);
+                } finally {
+                    plugin.setPluginSpawning(false);
+                }
+                if (zombie == null) continue;
+                if (type == null) utils.assignZombieType(zombie);
+                else utils.applyZombieType(zombie, type);
+                spawned++;
             }
         }
 
-        sender.sendMessage("§aSpawned " + spawnedCount + " " + type.name() + " zombies!");
-        return true;
+        private void scheduleNextBatch() {
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                Player player = Bukkit.getPlayer(playerId);
+                if (player == null) return;
+                if (!plugin.isEnabled() || !player.isOnline()) return;
+                runBatch(player);
+                if (remaining > 0) scheduleNextBatch();
+                else sendCompletion(player);
+            });
+        }
+
+        private void sendCompletion(Player player) {
+            String label = type == null ? "horde zombies" : type.name() + " zombies";
+            player.sendMessage("§aSpawned " + spawned + " " + label + "!");
+        }
     }
 
     // ==================================================================================

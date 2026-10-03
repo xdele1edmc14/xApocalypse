@@ -141,11 +141,25 @@ class UndeadSpawnerTest {
         verify(world, never()).getHighestBlockYAt(0, 0, HeightMap.MOTION_BLOCKING_NO_LEAVES);
     }
 
+    @Test
+    void rejectsUnloadedChunkBeforeReadingTerrain() {
+        World world = mockWorld(World.Environment.NORMAL);
+        when(world.isChunkLoaded(2, -2)).thenReturn(false);
+
+        Location result = new UndeadSpawner(null, null)
+                .getSurfaceSpawnLocation(new Location(world, 40.5, 70, -24.5));
+
+        assertNull(result);
+        verify(world, never()).getHighestBlockYAt(anyInt(), anyInt(), any(HeightMap.class));
+        verify(world, never()).getBlockAt(anyInt(), anyInt(), anyInt());
+    }
+
     private static World mockWorld(World.Environment environment) {
         World world = mock(World.class);
         when(world.getEnvironment()).thenReturn(environment);
         when(world.getMinHeight()).thenReturn(-64);
         when(world.getMaxHeight()).thenReturn(320);
+        when(world.isChunkLoaded(anyInt(), anyInt())).thenReturn(true);
         return world;
     }
 

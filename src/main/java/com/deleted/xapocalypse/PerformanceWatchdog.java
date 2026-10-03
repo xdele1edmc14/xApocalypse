@@ -36,6 +36,9 @@ public class PerformanceWatchdog {
     };
     private final double lodDistanceThreshold = 32.0; // Blocks
     private final long lodTickInterval = 20L; // Ticks between AI updates for far zombies (1 second)
+    private List<Player> lodSnapshotSource = List.of();
+    private long lodSnapshotTick = Long.MIN_VALUE;
+    private List<PlayerPosition> lodPlayerPositions = List.of();
 
     public PerformanceWatchdog(xApocalypse plugin) {
         this.plugin = plugin;
@@ -101,7 +104,8 @@ public class PerformanceWatchdog {
 
                 if (zombieCount > maxZombies) {
                     plugin.debugLog("Zombie count exceeded limit in " + world.getName() + ": " + zombieCount + " > " + maxZombies);
-                    cullZombiesInWorld(world, zombieCount - maxZombies);
+                    cullZombiesInWorld(world, zombieCount - maxZombies,
+                            snapshotPlayerPositions(world.getPlayers()));
                 }
             }
         } catch (Exception e) {
@@ -149,7 +153,8 @@ public class PerformanceWatchdog {
         return spawningPaused;
     }
 
-    private void cullZombiesInWorld(World world, int amount) {
+    private void cullZombiesInWorld(
+            World world, int amount, List<PlayerPosition> playerPositions) {
         List<Zombie> zombies = new ArrayList<>();
         
         for (Entity entity : world.getEntitiesByClass(Zombie.class)) {
@@ -164,7 +169,7 @@ public class PerformanceWatchdog {
         // Cache distances to avoid recalculating during sorting and culling
         List<ZombieDistance> zombieDistances = new ArrayList<>(zombies.size());
         for (Zombie zombie : zombies) {
-            double distance = getDistanceToNearestPlayer(zombie);
+            double distance = getDistanceToNearestPlayer(zombie, playerPositions);
             zombieDistances.add(new ZombieDistance(zombie, distance));
         }
 
@@ -187,16 +192,15 @@ public class PerformanceWatchdog {
         }
     }
 
-    private double getDistanceToNearestPlayer(Entity entity) {
-        double minDist = Double.MAX_VALUE;
-        for (org.bukkit.entity.Player player : Bukkit.getOnlinePlayers()) {
-            if (!player.getWorld().equals(entity.getWorld())) continue;
-            double dist = player.getLocation().distanceSquared(entity.getLocation());
-            if (dist < minDist) {
-                minDist = dist;
-            }
+    private double getDistanceToNearestPlayer(
+            Entity entity, List<PlayerPosition> playerPositions) {
+        double minDistanceSquared = Double.MAX_VALUE;
+        for (PlayerPosition player : playerPositions) {
+            double distanceSquared = player.distanceSquared(
+                    entity.getX(), entity.getY(), entity.getZ());
+            if (distanceSquared < minDistanceSquared) minDistanceSquared = distanceSquared;
         }
-        return Math.sqrt(minDist);
+        return Math.sqrt(minDistanceSquared);
     }
 
     public double getCurrentTPSValue() {
@@ -216,15 +220,17 @@ public class PerformanceWatchdog {
         if (zombie.getPersistentDataContainer().has(
                 xApocalypseUtils.ANIMATING_KEY, org.bukkit.persistence.PersistentDataType.BYTE)) return false;
 
-        if (worldPlayers.isEmpty()) {
+        List<PlayerPosition> playerPositions = lodPlayerPositions(worldPlayers, currentTick);
+        if (playerPositions.isEmpty()) {
             if (zombie.hasAI()) zombie.setAI(false);
             zombieLastAITick.put(zombie, currentTick);
             return false;
         }
 
         double nearestDistanceSquared = Double.MAX_VALUE;
-        for (Player player : worldPlayers) {
-            double distanceSquared = zombie.getLocation().distanceSquared(player.getLocation());
+        for (PlayerPosition player : playerPositions) {
+            double distanceSquared = player.distanceSquared(
+                    zombie.getX(), zombie.getY(), zombie.getZ());
             if (distanceSquared < nearestDistanceSquared) nearestDistanceSquared = distanceSquared;
         }
 
@@ -246,6 +252,39 @@ public class PerformanceWatchdog {
     public void finishAITick() {
         if (zombieLastAITick.size() > 500) {
             zombieLastAITick.entrySet().removeIf(entry -> entry.getKey().isDead() || !entry.getKey().isValid());
+        }
+        lodSnapshotSource = List.of();
+        lodSnapshotTick = Long.MIN_VALUE;
+        lodPlayerPositions = List.of();
+    }
+
+    private List<PlayerPosition> lodPlayerPositions(
+            List<Player> players, long currentTick) {
+        if (players == lodSnapshotSource && currentTick == lodSnapshotTick) {
+            return lodPlayerPositions;
+        }
+        lodSnapshotSource = players;
+        lodSnapshotTick = currentTick;
+        lodPlayerPositions = snapshotPlayerPositions(players);
+        return lodPlayerPositions;
+    }
+
+    private static List<PlayerPosition> snapshotPlayerPositions(List<Player> players) {
+        if (players.isEmpty()) return List.of();
+        List<PlayerPosition> snapshot = new ArrayList<>(players.size());
+        for (Player player : players) {
+            snapshot.add(new PlayerPosition(
+                    player.getX(), player.getY(), player.getZ()));
+        }
+        return snapshot;
+    }
+
+    private record PlayerPosition(double x, double y, double z) {
+        double distanceSquared(double otherX, double otherY, double otherZ) {
+            double dx = x - otherX;
+            double dy = y - otherY;
+            double dz = z - otherZ;
+            return dx * dx + dy * dy + dz * dz;
         }
     }
 

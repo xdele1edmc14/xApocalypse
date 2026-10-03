@@ -6,6 +6,9 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class HordeSpawnerTask extends BukkitRunnable {
@@ -39,7 +42,10 @@ public class HordeSpawnerTask extends BukkitRunnable {
                 return;
             }
 
-            for (Player player : Bukkit.getOnlinePlayers()) {
+            plugin.beginHordeSpawnCycle();
+            List<Player> players = new ArrayList<>(Bukkit.getOnlinePlayers());
+            Collections.shuffle(players);
+            for (Player player : players) {
                 // Diagnostic: log the live world the plugin actually sees for this player and the
                 // reason it is (or isn't) eligible. Decisive for the "/rtp lands me in the lobby
                 // world, not the main world" question — the spawner always reads player.getWorld()
@@ -77,7 +83,7 @@ public class HordeSpawnerTask extends BukkitRunnable {
                 plugin.spawnZombiesNearPlayer(player, isDayHordeSpawn);
             }
 
-        } catch (Throwable t) {
+        } catch (Exception t) {
             plugin.getLogger().severe("FATAL TASK ERROR: The repeating spawn task crashed! Check stack trace below.");
             t.printStackTrace();
         }

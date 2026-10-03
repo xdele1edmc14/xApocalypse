@@ -2,6 +2,7 @@ package com.deleted.xapocalypse;
 
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.Server;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
@@ -10,6 +11,8 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.LlamaSpit;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Zombie;
+import org.bukkit.event.entity.EntityChangeBlockEvent;
+import org.bukkit.plugin.PluginManager;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.util.Vector;
@@ -42,11 +45,17 @@ import static org.mockito.Mockito.when;
 
 class SpecialZombieBehaviorTest {
     private xApocalypseUtils utils;
+    private PluginManager pluginManager;
 
     @BeforeEach
     void setUp() throws Exception {
         xApocalypse plugin = mock(xApocalypse.class);
+        Server server = mock(Server.class);
+        pluginManager = mock(PluginManager.class);
         FileConfiguration config = mock(FileConfiguration.class);
+        when(plugin.getServer()).thenReturn(server);
+        when(server.getPluginManager()).thenReturn(pluginManager);
+        when(server.createBlockData(Material.AIR)).thenReturn(mock(BlockData.class));
         when(plugin.getConfig()).thenReturn(config);
         when(config.getStringList(anyString())).thenReturn(List.of());
         when(config.getBoolean(anyString(), anyBoolean())).thenAnswer(i -> i.getArgument(1));
@@ -99,6 +108,25 @@ class SpecialZombieBehaviorTest {
         tick("tickMinerAI", miner);
 
         verify(support, never()).breakNaturally();
+    }
+
+    @Test
+    void minerRespectsCancelledEntityChangeBlockEvent() throws Exception {
+        World world = mock(World.class);
+        Zombie miner = minerAt(world, 0.1, 64, 0.1);
+        LivingEntity target = targetAt(world, 10.1, 64, 10.1);
+        Block obstacle = breakableBlock(world, 1, 64, 1);
+        when(miner.getTarget()).thenReturn(target);
+        stubAirEverywhereExcept(world, obstacle, 1, 64, 1);
+        doAnswer(invocation -> {
+            invocation.getArgument(0, EntityChangeBlockEvent.class).setCancelled(true);
+            return null;
+        }).when(pluginManager).callEvent(any(EntityChangeBlockEvent.class));
+
+        tick("tickMinerAI", miner);
+
+        verify(obstacle, never()).breakNaturally();
+        verify(obstacle, never()).setType(Material.AIR);
     }
 
     @Test

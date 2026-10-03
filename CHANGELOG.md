@@ -2,6 +2,25 @@
 
 All notable changes to xApocalypse are documented here.
 
+## [1.6.3] - 2026-10-03
+
+### Fixed
+
+- Put one strict terrain-probe budget around each natural horde cycle, randomized player order, and checked rise-animation capacity before touching terrain.
+- Rejected unloaded chunks before ordinary zombie or optional MythicMobs Mutant terrain lookups, preventing synchronous chunk loads during placement.
+- Capped `/xa spawn` by remaining world capacity and spread large requests into ten-attempt tick batches.
+- Clamped the Mutant loop to a safe interval, eight real placement probes, and at most one successful spawn per cycle.
+- Reused primitive player-coordinate snapshots for LOD and culling instead of allocating player and zombie `Location` objects for every pair.
+- Batched and deduplicated loaded-chunk cleanup on reload, and batched Blood Moon entity removal through UUID queues.
+- Allowed fatal JVM errors to escape the repeating horde task while continuing to log recoverable exceptions.
+- Fired cancellable `EntityChangeBlockEvent` events before Miner zombies alter blocks, allowing protection plugins to veto griefing.
+- Removed expired offline immunity entries from active scans while retaining the saved max-health restoration state for their next join.
+
+### Compatibility
+
+- Targets Paper 26.2 and Java 25. Existing configuration and persistence files remain compatible.
+- MythicMobs remains optional, and xApocalypse Mutants remain supported.
+
 ## [1.6.2] - 2026-10-02
 
 ### Fixed
