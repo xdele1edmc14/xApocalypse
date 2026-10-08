@@ -31,6 +31,7 @@ import org.bukkit.scheduler.BukkitTask;
 public class MythicMobsManager {
     private static final int MAX_PLACEMENT_PROBES_PER_SEARCH = 8;
     private static final int CLEANUP_BATCH_SIZE = 10;
+    private static final long TRACKED_MUTANT_REFRESH_INTERVAL_MILLIS = 1_000L;
     private static final NamespacedKey MYTHIC_ENTITY_KEY =
             new NamespacedKey("xapocalypse", "mythic_entity");
     private static final NamespacedKey BLOOD_MOON_MUTANT_KEY =
@@ -42,6 +43,7 @@ public class MythicMobsManager {
     private boolean mythicMobsEnabled = false;
     private final Set<UUID> activeMutants = new HashSet<>();
     private BukkitTask spawnTickTask = null;
+    private long lastTrackedMutantRefreshMillis = 0L;
     private String mobType;
     private int maxGlobalCap;
     private double spawnChance;
@@ -61,6 +63,12 @@ public class MythicMobsManager {
     // Three consecutive misses (~15 s at the default 100-tick interval) is enough to
     // confirm the blood moon is genuinely over without being sensitive to transient blips.
     private int bloodMoonMissCount = 0;
+
+    enum CommandSpawnResult {
+        SPAWNED,
+        RETRY,
+        STOP
+    }
 
     public MythicMobsManager(xApocalypse plugin) {
         this.plugin = plugin;
@@ -208,43 +216,27 @@ public class MythicMobsManager {
         this.startSpawnTickLoop();
     }
 
-    public int spawnMutantCommand(Player player, int count, int radius) {
-        if (!this.mythicMobsEnabled) {
-            player.sendMessage("§c[MythicMobs] MythicMobs is not enabled on this server.");
-            return 0;
-        } else {
-            this.pruneDeadMutants();
-            int spawned = 0;
-            int noValidLocation = 0;
-            int failedSpawn = 0;
-
-            for(int i = 0; i < count; ++i) {
-                if (this.maxGlobalCap > 0 && this.activeMutants.size() >= this.maxGlobalCap) {
-                    player.sendMessage("§e[MythicMobs] Global cap reached.");
-                    break;
-                }
-
-                Location loc = this.findSpawnLocation(player.getLocation(), radius, radius + 2, false);
-                if (loc == null) {
-                    noValidLocation++;
-                    continue;
-                }
-
-                Entity entity = this.spawnMythicMob(loc, false);
-                if (entity != null) {
-                    ++spawned;
-                } else {
-                    failedSpawn++;
-                }
-            }
-
-            if (spawned < count) {
-                this.plugin.debugLog("[MythicMobs] Mutant command near " + player.getName() + ": "
-                        + spawned + "/" + count + " spawned (no location: " + noValidLocation
-                        + ", API spawn failed: " + failedSpawn + ").");
-            }
-            return spawned;
+    /**
+     * Performs exactly one bounded Mutant command attempt. The command scheduler calls this at
+     * most once per tick because a MythicMobs spawn is substantially more expensive than a plain
+     * Bukkit zombie spawn. Returning {@link CommandSpawnResult#STOP} retires the queued job when
+     * the integration disappears or its global cap is full.
+     */
+    CommandSpawnResult trySpawnMutantCommand(Player player, int radius) {
+        if (!this.mythicMobsEnabled || this.mmAPI == null) {
+            return CommandSpawnResult.STOP;
         }
+
+        this.pruneDeadMutants();
+        if (this.maxGlobalCap > 0 && this.activeMutants.size() >= this.maxGlobalCap) {
+            return CommandSpawnResult.STOP;
+        }
+
+        Location loc = this.findSpawnLocation(player.getLocation(), radius, radius + 2, false);
+        if (loc == null) return CommandSpawnResult.RETRY;
+        return this.spawnMythicMob(loc, false) == null
+                ? CommandSpawnResult.RETRY
+                : CommandSpawnResult.SPAWNED;
     }
 
     private void spawnGuaranteedMutant() {
@@ -451,11 +443,20 @@ public class MythicMobsManager {
     // Fix: only remove a UUID when the entity is confirmed to exist AND be dead.
     // If null, the chunk is simply unloaded — keep the UUID in the set.
     private void pruneDeadMutants() {
-        rebuildTrackedMutants();
+        long now = System.currentTimeMillis();
+        if (shouldRefreshTrackedMutants(lastTrackedMutantRefreshMillis, now)) {
+            rebuildTrackedMutants();
+        }
         this.activeMutants.removeIf((uuid) -> {
             Entity entity = Bukkit.getEntity(uuid);
             return entity != null && entity.isDead();
         });
+    }
+
+    static boolean shouldRefreshTrackedMutants(long lastRefreshMillis, long nowMillis) {
+        return lastRefreshMillis <= 0L
+                || nowMillis < lastRefreshMillis
+                || nowMillis - lastRefreshMillis >= TRACKED_MUTANT_REFRESH_INTERVAL_MILLIS;
     }
 
     /** Rebuilds the cap from MythicMobs' own durable active-mob registry. */
@@ -470,6 +471,7 @@ public class MythicMobsManager {
             }
             this.activeMutants.retainAll(discovered);
             this.activeMutants.addAll(discovered);
+            this.lastTrackedMutantRefreshMillis = System.currentTimeMillis();
         } catch (Exception e) {
             this.plugin.debugLog("[MythicMobs] Could not rebuild Mutant tracking: " + e.getMessage());
         }

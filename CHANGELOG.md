@@ -2,6 +2,17 @@
 
 All notable changes to xApocalypse are documented here.
 
+## [1.6.4] - 2026-10-08
+
+### Fixed
+
+- Retried failed terrain probes for manual `/xa spawn` requests instead of silently consuming the requested zombie count.
+- Kept manual spawning bounded to ten probes per tick and 1,500 total probes, then reported the exact spawned/requested result.
+- Moved every admin spawn request onto one shared ten-probe-per-tick queue, so multiple admins cannot multiply the limit and cook the main thread.
+- Limited manual MythicMobs Mutant spawning to one expensive placement/spawn attempt per tick instead of creating the full requested count synchronously.
+- Throttled full MythicMobs active-registry refreshes during queued Mutant commands to once per second.
+- Rejected duplicate queued spawn jobs from the same player and cleared unfinished jobs safely on reload or shutdown.
+
 ## [1.6.3] - 2026-10-03
 
 ### Fixed

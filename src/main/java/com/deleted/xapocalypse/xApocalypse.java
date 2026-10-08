@@ -52,6 +52,7 @@ public class xApocalypse extends JavaPlugin {
     private ScentManager scent;
     private HordeManager horde;
     private DropManager dropManager;
+    private xApocalypseCommand commandExecutor;
 
     // --- GENERAL CONFIG ---
     private List<String> enabledWorlds;
@@ -128,7 +129,7 @@ public class xApocalypse extends JavaPlugin {
         // Register the single root command. The /xa and /zombie aliases are declared in
         // plugin.yml, so wiring "xapocalypse" wires all three. Sub-commands are dispatched
         // inside xApocalypseCommand (help, reload, item, spawn, forcebloodmoon|fbm, stopbloodmoon|sbm).
-        xApocalypseCommand commandExecutor = new xApocalypseCommand(this);
+        commandExecutor = new xApocalypseCommand(this);
         xApocalypseTabCompleter tabCompleter = new xApocalypseTabCompleter();
         getCommand("xapocalypse").setExecutor(commandExecutor);
         getCommand("xapocalypse").setTabCompleter(tabCompleter);
@@ -207,6 +208,10 @@ public class xApocalypse extends JavaPlugin {
             utils.cleanupTransientEffects();
         }
 
+        if (commandExecutor != null) {
+            commandExecutor.cancelAdminSpawnJobs();
+        }
+
         Bukkit.getScheduler().cancelTasks(this);
 
         if (immunity != null) {
@@ -236,6 +241,9 @@ public class xApocalypse extends JavaPlugin {
 
     /** Full reload pipeline shared by /xa reload. Mirrors the original onCommand("reload") sequence. */
     public void reloadAll() {
+        if (commandExecutor != null) {
+            commandExecutor.cancelAdminSpawnJobs();
+        }
         if (utils != null) {
             utils.cleanupTransientEffects();
         }

@@ -16,7 +16,9 @@ import java.util.List;
 import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyDouble;
@@ -30,6 +32,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class MythicMobsManagerTest {
+
+    @Test
+    void activeMobRegistryRefreshIsThrottledDuringQueuedCommandSpawns() {
+        assertTrue(MythicMobsManager.shouldRefreshTrackedMutants(0L, 1_000L));
+        assertFalse(MythicMobsManager.shouldRefreshTrackedMutants(500L, 1_000L));
+        assertTrue(MythicMobsManager.shouldRefreshTrackedMutants(1_000L, 2_000L));
+    }
 
     @Test
     void spawnIntervalIsClampedToAtLeastOneSecond() throws Exception {

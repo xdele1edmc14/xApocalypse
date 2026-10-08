@@ -10,8 +10,13 @@ import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Zombie;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.scheduler.BukkitTask;
 
+import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -36,6 +41,9 @@ import java.util.concurrent.ThreadLocalRandom;
 public class xApocalypseCommand implements CommandExecutor {
 
     private static final int ADMIN_SPAWN_ATTEMPTS_PER_TICK = 10;
+    private static final int ADMIN_SPAWN_PROBES_PER_ZOMBIE = 5;
+    private static final int ADMIN_SPAWN_MAX_TOTAL_PROBES = 1_500;
+    private static final int MUTANT_ATTEMPT_COST = ADMIN_SPAWN_ATTEMPTS_PER_TICK;
 
     private final xApocalypse plugin;
     private final MessageManager messageManager;
@@ -43,6 +51,9 @@ public class xApocalypseCommand implements CommandExecutor {
     private final MythicMobsManager mythicMobsManager;
     private final UndeadSpawner undeadSpawner;
     private final xApocalypseUtils utils;
+    private final Deque<AdminSpawnJob> adminSpawnJobs = new ArrayDeque<>();
+    private final Set<UUID> playersWithAdminSpawnJob = new HashSet<>();
+    private BukkitTask adminSpawnTask;
 
     public xApocalypseCommand(xApocalypse plugin) {
         this.plugin = plugin;
@@ -275,10 +286,7 @@ public class xApocalypseCommand implements CommandExecutor {
                 sender.sendMessage("§c[MythicMobs] MythicMobs is not available on this server.");
                 return true;
             }
-            int spawned = mythicMobsManager.spawnMutantCommand(player, count, radius);
-            sender.sendMessage("§aSpawned §c" + spawned + " §a" + mythicMobsManager.getMobType()
-                    + "§a! (Active: §c" + mythicMobsManager.getActiveMutantCount()
-                    + "§a/§c" + mythicMobsManager.getMaxGlobalCap() + "§a)");
+            startBatchedAdminSpawn(player, null, count, radius, true);
             return true;
         }
 
@@ -287,7 +295,7 @@ public class xApocalypseCommand implements CommandExecutor {
         count = Math.min(count, remainingCapacity);
 
         if (typeArg.equals("HORDE")) {
-            startBatchedAdminSpawn(player, null, count, radius);
+            startBatchedAdminSpawn(player, null, count, radius, false);
             return true;
         }
 
@@ -300,91 +308,173 @@ public class xApocalypseCommand implements CommandExecutor {
             return true;
         }
 
-        startBatchedAdminSpawn(player, type, count, radius);
+        startBatchedAdminSpawn(player, type, count, radius, false);
         return true;
     }
 
     private void startBatchedAdminSpawn(
-            Player player, xApocalypseUtils.ZombieType type, int requested, int radius) {
+            Player player, xApocalypseUtils.ZombieType type, int requested, int radius,
+            boolean mutant) {
         if (requested <= 0) {
             player.sendMessage("§eZombie cap reached; nothing was spawned.");
             return;
         }
 
-        AdminSpawnJob job = new AdminSpawnJob(player, type, requested, radius);
-        job.runBatch(player);
-        if (job.remaining > 0) {
-            job.scheduleNextBatch();
-            player.sendMessage("§aQueued " + requested + " zombies in safe 10-attempt batches.");
-        } else {
-            job.sendCompletion(player);
+        UUID playerId = player.getUniqueId();
+        if (!playersWithAdminSpawnJob.add(playerId)) {
+            player.sendMessage("§eYou already have an active /xa spawn job. Let it finish first.");
+            return;
+        }
+
+        adminSpawnJobs.addLast(new AdminSpawnJob(player, type, requested, radius, mutant));
+        ensureAdminSpawnTask();
+        String label = mutant ? "Mutants" : "zombies";
+        player.sendMessage("§aQueued " + requested + " " + label
+                + " under the shared safe spawn budget.");
+    }
+
+    private void ensureAdminSpawnTask() {
+        if (adminSpawnTask != null && !adminSpawnTask.isCancelled()) return;
+        adminSpawnTask = Bukkit.getScheduler().runTaskTimer(
+                plugin, this::runAdminSpawnTick, 1L, 1L);
+    }
+
+    /**
+     * One shared scheduler owns every admin spawn request. Ten ordinary terrain probes total may
+     * run in a server tick, regardless of how many admins queue commands. A Mutant placement costs
+     * the whole tick budget, so MythicMobs can never receive a multi-boss command burst.
+     */
+    void runAdminSpawnTick() {
+        if (!plugin.isEnabled()) {
+            cancelAdminSpawnJobs();
+            return;
+        }
+
+        int budget = ADMIN_SPAWN_ATTEMPTS_PER_TICK;
+        int unaffordableRotations = 0;
+        while (budget > 0 && !adminSpawnJobs.isEmpty()) {
+            AdminSpawnJob job = adminSpawnJobs.removeFirst();
+            Player player = Bukkit.getPlayer(job.playerId);
+            if (player == null || !player.isOnline()) {
+                playersWithAdminSpawnJob.remove(job.playerId);
+                unaffordableRotations = 0;
+                continue;
+            }
+
+            int cost = job.mutant ? MUTANT_ATTEMPT_COST : 1;
+            if (cost > budget) {
+                adminSpawnJobs.addLast(job);
+                unaffordableRotations++;
+                if (unaffordableRotations >= adminSpawnJobs.size()) break;
+                continue;
+            }
+
+            unaffordableRotations = 0;
+            budget -= cost;
+            job.runAttempt(player);
+            if (job.hasWorkRemaining()) {
+                adminSpawnJobs.addLast(job);
+            } else {
+                playersWithAdminSpawnJob.remove(job.playerId);
+                job.sendCompletion(player);
+            }
+        }
+
+        if (adminSpawnJobs.isEmpty()) stopAdminSpawnTask();
+    }
+
+    void cancelAdminSpawnJobs() {
+        stopAdminSpawnTask();
+        adminSpawnJobs.clear();
+        playersWithAdminSpawnJob.clear();
+    }
+
+    private void stopAdminSpawnTask() {
+        if (adminSpawnTask != null) {
+            adminSpawnTask.cancel();
+            adminSpawnTask = null;
         }
     }
 
     private final class AdminSpawnJob {
         private final UUID playerId;
         private final xApocalypseUtils.ZombieType type;
+        private final int requested;
         private final int radius;
+        private final boolean mutant;
         private int remaining;
+        private int probesRemaining;
         private int spawned;
 
         private AdminSpawnJob(
-                Player player, xApocalypseUtils.ZombieType type, int requested, int radius) {
+                Player player, xApocalypseUtils.ZombieType type, int requested, int radius,
+                boolean mutant) {
             this.playerId = player.getUniqueId();
             this.type = type;
+            this.requested = requested;
             this.remaining = requested;
+            this.probesRemaining = (int) Math.min(
+                    ADMIN_SPAWN_MAX_TOTAL_PROBES,
+                    (long) requested * ADMIN_SPAWN_PROBES_PER_ZOMBIE);
             this.radius = radius;
+            this.mutant = mutant;
         }
 
-        private void runBatch(Player player) {
+        private void runAttempt(Player player) {
+            if (remaining <= 0 || probesRemaining <= 0) return;
+            probesRemaining--;
+
+            if (mutant) {
+                MythicMobsManager.CommandSpawnResult result =
+                        mythicMobsManager.trySpawnMutantCommand(player, radius);
+                if (result == MythicMobsManager.CommandSpawnResult.STOP) {
+                    probesRemaining = 0;
+                } else if (result == MythicMobsManager.CommandSpawnResult.SPAWNED) {
+                    remaining--;
+                    spawned++;
+                }
+                return;
+            }
+
             int maxZombies = Math.max(0,
                     plugin.getConfig().getInt("performance.max-total-zombies", 300));
             int capacity = Math.max(0,
                     maxZombies - player.getWorld().getEntitiesByClass(Zombie.class).size());
-            int attempts = Math.min(ADMIN_SPAWN_ATTEMPTS_PER_TICK,
-                    Math.min(remaining, capacity));
-            if (attempts <= 0) {
-                remaining = 0;
+            if (capacity <= 0) {
+                probesRemaining = 0;
                 return;
             }
 
             Location center = player.getLocation();
-            for (int i = 0; i < attempts; i++) {
-                remaining--;
-                Location candidate = center.clone().add(
-                        ThreadLocalRandom.current().nextDouble(-radius, radius), 0,
-                        ThreadLocalRandom.current().nextDouble(-radius, radius));
-                Location surface = undeadSpawner.getSurfaceSpawnLocation(candidate);
-                if (surface == null) continue;
+            Location candidate = center.clone().add(
+                    ThreadLocalRandom.current().nextDouble(-radius, radius), 0,
+                    ThreadLocalRandom.current().nextDouble(-radius, radius));
+            Location surface = undeadSpawner.getSurfaceSpawnLocation(candidate);
+            if (surface == null) return;
 
-                Zombie zombie;
-                plugin.setPluginSpawning(true);
-                try {
-                    zombie = (Zombie) player.getWorld().spawnEntity(surface, EntityType.ZOMBIE);
-                } finally {
-                    plugin.setPluginSpawning(false);
-                }
-                if (zombie == null) continue;
-                if (type == null) utils.assignZombieType(zombie);
-                else utils.applyZombieType(zombie, type);
-                spawned++;
+            Zombie zombie;
+            plugin.setPluginSpawning(true);
+            try {
+                zombie = (Zombie) player.getWorld().spawnEntity(surface, EntityType.ZOMBIE);
+            } finally {
+                plugin.setPluginSpawning(false);
             }
+            if (zombie == null) return;
+            if (type == null) utils.assignZombieType(zombie);
+            else utils.applyZombieType(zombie, type);
+            remaining--;
+            spawned++;
         }
 
-        private void scheduleNextBatch() {
-            Bukkit.getScheduler().runTask(plugin, () -> {
-                Player player = Bukkit.getPlayer(playerId);
-                if (player == null) return;
-                if (!plugin.isEnabled() || !player.isOnline()) return;
-                runBatch(player);
-                if (remaining > 0) scheduleNextBatch();
-                else sendCompletion(player);
-            });
+        private boolean hasWorkRemaining() {
+            return remaining > 0 && probesRemaining > 0;
         }
 
         private void sendCompletion(Player player) {
-            String label = type == null ? "horde zombies" : type.name() + " zombies";
-            player.sendMessage("§aSpawned " + spawned + " " + label + "!");
+            String label = mutant
+                    ? mythicMobsManager.getMobType() + " Mutants"
+                    : type == null ? "horde zombies" : type.name() + " zombies";
+            player.sendMessage("§aSpawned " + spawned + "/" + requested + " " + label + "!");
         }
     }
 
