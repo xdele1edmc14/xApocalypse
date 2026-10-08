@@ -35,6 +35,10 @@ public class xApocalypseUtils {
     public static final NamespacedKey ANIMATING_KEY = new NamespacedKey("xapocalypse", "animating");
     // Marker placed on the Zombie Guts ItemStack so it is identified by PDC rather than display name.
     public static final NamespacedKey ZOMBIE_GUTS_KEY = new NamespacedKey("xapocalypse", "zombie_guts_item");
+    // Durable backup of a player's max health while Zombie Guts immunity is active. Unlike
+    // data.yml, player PDC is stored in the player file, so either copy can recover the other.
+    public static final NamespacedKey IMMUNITY_ORIGINAL_HEALTH_KEY =
+            new NamespacedKey("xapocalypse", "immunity_original_health");
     // Marks a zombie that was spawned/typed during an active blood moon, so it can be despawned
     // when the blood moon ends (see despawnBloodMoonZombies). Zombies present before the event are untagged.
     public static final NamespacedKey BLOOD_MOON_KEY = new NamespacedKey("xapocalypse", "blood_moon");

@@ -2,6 +2,7 @@ package com.deleted.xapocalypse;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
+import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
 import org.bukkit.boss.BossBar;
@@ -332,6 +333,7 @@ public class ImmunityManager {
         immunePlayers.remove(uuid);
         immunityEndTime.remove(uuid);
         originalHealth.remove(uuid);
+        player.getPersistentDataContainer().remove(xApocalypseUtils.IMMUNITY_ORIGINAL_HEALTH_KEY);
 
         BukkitTask task = scheduledTasks.remove(uuid);
         if (task != null) task.cancel();
@@ -357,8 +359,17 @@ public class ImmunityManager {
 
     public void onPlayerJoin(Player player) {
         UUID uuid = player.getUniqueId();
+        AttributeInstance maxHealth = player.getAttribute(AttributeResolver.MAX_HEALTH);
 
-        if (originalHealth.containsKey(uuid) && player.getAttribute(AttributeResolver.MAX_HEALTH) != null) {
+        // data.yml and the player file are deliberately independent recovery copies. If the YAML
+        // state was blank or truncated, only restore players carrying xApocalypse's own marker;
+        // never guess based on a 10.0 health value, because another plugin may own that setting.
+        if (!originalHealth.containsKey(uuid)) {
+            recoverOrphanedHealth(player, maxHealth);
+            return;
+        }
+
+        if (maxHealth != null) {
             // BUGFIX: was player.getWorld().getFullTime() — corrupted by world.setTime()
             // calls in the blood moon system. Use the real-world clock instead.
             long remainingMillis = 0;
@@ -367,7 +378,7 @@ public class ImmunityManager {
             }
 
             if (remainingMillis > 0) {
-                player.getAttribute(AttributeResolver.MAX_HEALTH).setBaseValue(10.0);
+                maxHealth.setBaseValue(10.0);
                 player.setHealth(Math.min(player.getHealth(), 10.0));
                 immunePlayers.add(uuid);
 
@@ -378,12 +389,38 @@ public class ImmunityManager {
                 scheduleImmunityRemoval(player, remainingMillis / 50L);
             } else {
                 double storedOriginalHealth = originalHealth.get(uuid);
-                player.getAttribute(AttributeResolver.MAX_HEALTH).setBaseValue(storedOriginalHealth);
+                maxHealth.setBaseValue(storedOriginalHealth);
                 player.setHealth(Math.min(player.getHealth(), storedOriginalHealth));
                 cleanUpPlayerState(player);
                 save();
             }
         }
+    }
+
+    void rememberOriginalHealth(Player player, double health) {
+        if (!Double.isFinite(health) || health <= 0.0) return;
+        if (!player.getPersistentDataContainer().has(
+                xApocalypseUtils.IMMUNITY_ORIGINAL_HEALTH_KEY, PersistentDataType.DOUBLE)) {
+            player.getPersistentDataContainer().set(
+                    xApocalypseUtils.IMMUNITY_ORIGINAL_HEALTH_KEY,
+                    PersistentDataType.DOUBLE,
+                    health);
+        }
+    }
+
+    void recoverOrphanedHealth(Player player, AttributeInstance maxHealth) {
+        if (maxHealth == null) return;
+
+        Double storedHealth = player.getPersistentDataContainer().get(
+                xApocalypseUtils.IMMUNITY_ORIGINAL_HEALTH_KEY,
+                PersistentDataType.DOUBLE);
+        if (storedHealth == null || !Double.isFinite(storedHealth) || storedHealth <= 0.0) return;
+
+        maxHealth.setBaseValue(storedHealth);
+        player.setHealth(Math.min(player.getHealth(), storedHealth));
+        player.getPersistentDataContainer().remove(xApocalypseUtils.IMMUNITY_ORIGINAL_HEALTH_KEY);
+        player.sendMessage(messageManager.get("immunity.health-restored"));
+        plugin.getLogger().warning("Recovered orphaned Zombie Guts health state for " + player.getName());
     }
 
     /** Immune-player cleanup on quit. The listener invokes {@link #save()} afterwards (parity with original ordering). */
@@ -499,10 +536,13 @@ public class ImmunityManager {
         if (player.getWorld() == null) return;
 
         double maxHealth = 10.0;
-        if (player.getAttribute(AttributeResolver.MAX_HEALTH) != null) {
-            originalHealth.put(uuid, player.getAttribute(AttributeResolver.MAX_HEALTH).getBaseValue());
+        AttributeInstance maxHealthAttribute = player.getAttribute(AttributeResolver.MAX_HEALTH);
+        if (maxHealthAttribute != null) {
+            double originalMaxHealth = maxHealthAttribute.getBaseValue();
+            originalHealth.put(uuid, originalMaxHealth);
+            rememberOriginalHealth(player, originalMaxHealth);
 
-            player.getAttribute(AttributeResolver.MAX_HEALTH).setBaseValue(maxHealth);
+            maxHealthAttribute.setBaseValue(maxHealth);
             player.setHealth(Math.min(player.getHealth(), maxHealth));
         }
 
