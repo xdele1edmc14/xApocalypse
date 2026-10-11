@@ -25,6 +25,8 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 public class DropManager {
 
+    private static final int MAX_CONFIGURED_DROP_AMOUNT = 64;
+
     private final xApocalypse plugin;
 
     private boolean enabled;
@@ -90,12 +92,12 @@ public class DropManager {
             Object matObj = map.get("material");
             if (matObj == null) continue;
             Material material = Material.matchMaterial(String.valueOf(matObj).trim().toUpperCase());
-            if (material == null || material.isAir()) {
+            if (material == null || material.isAir() || !material.isItem()) {
                 plugin.getLogger().warning("[CustomDrops] Skipping invalid material '" + matObj + "' in " + path);
                 continue;
             }
 
-            int[] range = parseAmount(map.get("amount"), path);
+            int[] range = parseAmount(map.get("amount"), path, material.getMaxStackSize());
             double chance = parseChance(map.get("chance"));
             if (chance <= 0.0) continue;
             if (chance > 1.0) {
@@ -136,8 +138,12 @@ public class DropManager {
         }
     }
 
-    /** Accepts a single int ("3"/3) or a "min-max" range; clamps to at least 1 and min &lt;= max. */
+    /** Accepts a single int ("3"/3) or a "min-max" range and bounds it to one safe stack. */
     private int[] parseAmount(Object amountObj, String path) {
+        return parseAmount(amountObj, path, MAX_CONFIGURED_DROP_AMOUNT);
+    }
+
+    private int[] parseAmount(Object amountObj, String path, int materialStackLimit) {
         int min = 1, max = 1;
         if (amountObj != null) {
             String s = String.valueOf(amountObj).trim();
@@ -155,15 +161,17 @@ public class DropManager {
                 min = max = 1;
             }
         }
-        min = Math.max(1, min);
-        max = Math.max(min, max);
+        int safeLimit = Math.clamp(materialStackLimit, 1, MAX_CONFIGURED_DROP_AMOUNT);
+        min = Math.clamp(min, 1, safeLimit);
+        max = Math.clamp(max, min, safeLimit);
         return new int[]{min, max};
     }
 
     private double parseChance(Object chanceObj) {
         if (chanceObj == null) return 0.0;
         try {
-            return Double.parseDouble(String.valueOf(chanceObj).trim());
+            double chance = Double.parseDouble(String.valueOf(chanceObj).trim());
+            return Double.isFinite(chance) ? chance : 0.0;
         } catch (NumberFormatException e) {
             return 0.0;
         }
@@ -171,6 +179,7 @@ public class DropManager {
 
     /** Clamps a broadcast chance to 0-1, warning once (per load) if it was out of range. */
     private double clampChance(double chance, String path) {
+        if (!Double.isFinite(chance)) return 0.0;
         if (chance > 1.0) {
             plugin.getLogger().warning("[KillCommands] chance " + chance + " in " + path
                     + " is above the documented 0.0-1.0 range; treating as guaranteed (1.0).");

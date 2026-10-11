@@ -6,18 +6,16 @@ A zombie apocalypse can spawn a *lot* of entities. xApocalypse ships with a **Pe
 
 ## Entity Cap & Culling
 
-The watchdog periodically (every `performance.check-interval-ticks`, default **100** ticks) counts zombies in each enabled world. If a world exceeds `performance.max-total-zombies` (default **300**), it **culls the excess**:
+The watchdog periodically (every `performance.check-interval-ticks`, default **100** ticks) counts xApocalypse-managed zombies in each enabled world. Vanilla zombies, NPC bases and third-party mobs do not consume this cap. If a world exceeds `performance.max-total-zombies` (default **300**), it **culls the excess**:
 
-- Zombies are sorted by distance to the nearest player, and the **furthest are removed first**.
-- Zombies **within 20 blocks** of a player are never culled — you won't see ones near you vanish.
+- Managed zombies are sorted by distance to the nearest player, and the **furthest are removed first**.
+- Managed zombies **within 20 blocks** of a player are never culled — you won't see ones near you vanish.
 
-This keeps total entity pressure bounded no matter how many players, hordes, scent multipliers, and Blood Moons are in play.
+This keeps xApocalypse's entity pressure bounded no matter how many players, hordes, scent multipliers, and Blood Moons are in play.
 
 ---
 
 ## TPS Watchdog
-
-The watchdog reads server TPS (via Paper's API) each check interval:
 
 The watchdog reads server TPS (via Paper's API) each check interval and compares it against
 `performance.tps-threshold` (default **15.0**):
@@ -25,7 +23,7 @@ The watchdog reads server TPS (via Paper's API) each check interval and compares
 | TPS | Behavior |
 |-----|----------|
 | **< `tps-threshold`** | New horde spawning is **paused** |
-| **≥ `tps-threshold` + 1.5** | Spawning **resumes** (small gap avoids rapid flapping) |
+| **≥ `tps-threshold + 1.5`** | Spawning **resumes** (the pause threshold is capped at 18.5 so the full gap remains reachable at 20 TPS) |
 
 While paused, the horde spawner task simply skips its work, so a struggling server stops digging itself deeper and gets a chance to recover. (Entity-count culling keeps running regardless.)
 
@@ -52,7 +50,7 @@ The LOD tracking map is bounded (capped at 1000 entries with automatic eviction 
 
 ```yaml
 performance:
-  max-total-zombies: 300        # global zombie cap per world (culls furthest over this)
+  max-total-zombies: 300        # xApocalypse-managed zombie cap per world
   tps-threshold: 15.0           # pause new zombie spawns when TPS drops below this; resume once it recovers
   check-interval-ticks: 100     # how often the watchdog runs (100 ticks = 5 s)
 ```
@@ -68,6 +66,6 @@ performance:
 | TPS drops during big fights | Lower `max-total-zombies`; lower `apocalypse-settings.max-single-horde-size` |
 | Hordes feel too thin | Raise `max-total-zombies` and/or horde sizes; lower `scent-system.scent-scale` |
 | Too many spawn attempts in rough terrain | Reduce `spawn-radius`; expect some "skipped" debug lines near water/ravines |
-| Spawning seems to stop entirely | Check console for critical-TPS pause messages; verify the server isn't sitting below 10 TPS |
+| Spawning seems to stop entirely | Check console for low-TPS pause messages; verify the server isn't below `performance.tps-threshold` |
 
 <p align="center"><i>← Back to <a href="Home.md">Wiki Home</a></i></p>

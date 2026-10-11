@@ -36,7 +36,7 @@ This is handled: in normal and custom-generator worlds, the spawner uses the no-
 - Check `visuals.use-nametags: true`. With `nametag-always-visible: false`, names only show when you look directly at a zombie.
 
 ### Custom zombies are burning up in daylight
-They shouldn't — every class except `NORMAL` gets permanent fire immunity. If you're seeing `NORMAL` zombies burn, that's intended (they behave like vanilla). If custom ones burn, verify `zombie-classes.enabled` is on so types are actually assigned.
+xApocalypse-managed zombies are protected from sunlight by default when `zombie-settings.allow-daylight-burning` is `false`. Ordinary classes still take Fire Aspect, lava and other fire damage; only Scorched is fully fireproof. Vanilla command, spawner and third-party zombies are not adopted by xApocalypse and still burn normally.
 
 ### Spitters / Bursters / Webbers don't do their thing
 - **Spitter** only fires when its target is **1.5–18 blocks** away and visible — near-overlap, blocked line of sight, or excessive distance prevents a shot.
@@ -86,7 +86,7 @@ Check `zombie-settings.zombie-guts.drop.enabled: true` and the `chance` value (d
 ## Performance
 
 ### TPS drops during big sieges
-Lower `performance.max-total-zombies` and/or `apocalypse-settings.max-single-horde-size`. The watchdog culls the furthest zombies over the cap and pauses spawning below 10 TPS.
+Lower `performance.max-total-zombies` and/or `apocalypse-settings.max-single-horde-size`. The watchdog culls the furthest managed zombies over the cap and pauses spawning below `performance.tps-threshold`.
 
 ### Zombies far away seem frozen
 That's the **LOD system** — AI is disabled beyond 32 blocks from any player (and for all zombies in player-less worlds) to save CPU. It re-enables automatically as players approach.

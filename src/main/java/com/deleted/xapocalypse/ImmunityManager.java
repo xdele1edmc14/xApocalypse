@@ -457,13 +457,14 @@ public class ImmunityManager {
         return guts;
     }
 
-    /** True if the stack is a Zombie Guts item — PDC marker first, legacy display-name match as a fallback. */
+    /** True only for a Zombie Guts stack carrying the exact private plugin marker. */
     public boolean isZombieGutsItem(ItemStack item) {
         if (item == null || item.getType() != Material.ROTTEN_FLESH) return false;
         ItemMeta meta = item.getItemMeta();
         if (meta == null) return false;
-        if (meta.getPersistentDataContainer().has(xApocalypseUtils.ZOMBIE_GUTS_KEY, PersistentDataType.BYTE)) return true;
-        return meta.hasDisplayName() && meta.getDisplayName().equals(messageManager.get("immunity.item-name"));
+        Byte marker = meta.getPersistentDataContainer().get(
+                xApocalypseUtils.ZOMBIE_GUTS_KEY, PersistentDataType.BYTE);
+        return marker != null && marker == (byte) 1;
     }
 
     /**

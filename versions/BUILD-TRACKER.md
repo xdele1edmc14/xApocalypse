@@ -4,9 +4,9 @@ This is the quick resume point for the ten-build release plan.
 
 ## Current position
 
-**Working build:** 1.6.4
-**Next action:** begin the 1.6.5 exploit and regression-coverage batch.
-**Latest archived build:** `2026-10-08/xApocalypse-1.6.4.jar`
+**Working build:** 1.7.0
+**Next action:** begin the Blood Moon atmosphere, scary-sounds and sleep-prevention batch.
+**Latest archived build:** `2026-10-09/xApocalypse-1.6.5.jar`
 
 ## Release queue
 
@@ -15,7 +15,7 @@ This is the quick resume point for the ten-build release plan.
 | 1.6.2 | 2026-10-09 | Built, tested, committed and pushed | Async safety, persistence and half-dead zombies |
 | 1.6.3 | 2026-10-16 | Built, tested, committed and pushed | Horde, chunk-loading and LOD performance |
 | 1.6.4 | 2026-10-23 | Built, archived, live-tested, committed and pushed | Moderate/minor bugs, lifecycle cleanup and the final admin-spawn load fixes |
-| 1.6.5 | 2026-10-30 | Not started | Exploits and regression coverage |
+| 1.6.5 | 2026-10-30 | Built, archived and tested; 75 automated tests plus live regressions passed | Exploits and regression coverage |
 | 1.7.0 | 2026-11-06 | Not started | Blood Moon atmosphere, scary sounds and sleep prevention |
 | 1.7.1 | 2026-11-13 | Not started | Crouching reduces zombie detection range |
 | 1.8.0 | 2026-11-20 | Not started | Thirst system |
@@ -25,15 +25,14 @@ This is the quick resume point for the ten-build release plan.
 
 ## Remaining builds
 
-Seven builds remain after 1.6.4:
+Six builds remain after 1.6.5:
 
-1. 1.6.5
-2. 1.7.0
-3. 1.7.1
-4. 1.8.0
-5. 1.9.0
-6. 1.10.0
-7. 1.11.0
+1. 1.7.0
+2. 1.7.1
+3. 1.8.0
+4. 1.9.0
+5. 1.10.0
+6. 1.11.0
 
 ## Rule for every build
 

@@ -1,6 +1,6 @@
 # PlaceholderAPI
 
-xApocalypse 1.6.4 provides an internal [PlaceholderAPI](https://www.spigotmc.org/resources/placeholderapi.6245/) expansion. PlaceholderAPI is optional: xApocalypse loads normally without it, and automatically registers the expansion when it is installed.
+xApocalypse 1.6.5 provides an internal [PlaceholderAPI](https://www.spigotmc.org/resources/placeholderapi.6245/) expansion. PlaceholderAPI is optional: xApocalypse loads normally without it, and automatically registers the expansion when it is installed.
 
 ## Available placeholders
 

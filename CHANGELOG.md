@@ -2,6 +2,20 @@
 
 All notable changes to xApocalypse are documented here.
 
+## [1.6.5] - 2026-10-09
+
+### Fixed
+
+- Required the exact xApocalypse item marker for Zombie Guts, preventing renamed rotten flesh from granting free immunity.
+- Disabled drops and experience when players break temporary Webber cobwebs, closing free string and Silk Touch farms.
+- Prevented Burster explosions from breaking blocks when the fuse ends inside a protected claim.
+- Rejected non-item custom-drop materials, bounded amounts to each item's real stack limit, and rejected non-finite chances, preventing death-handler crashes, overstacked rewards and malformed guaranteed drops.
+- Made `/xa item` grants atomic, so a full inventory cannot receive part of a stack before the command reports failure.
+- Limited built-in fire immunity to Scorched zombies; other classes now take fire and lava damage, while xApocalypse-managed zombies are protected from sunlight by default without making vanilla zombies sunproof or blocking Fire Aspect.
+- Prevented cancelled Burster target events and zero-damage melee hits from triggering special zombie effects.
+- Counted only xApocalypse-managed zombies toward the global cap and stopped adopting command, spawner and third-party zombies, so vanilla farms and NPCs cannot block hordes or trigger incorrect culling.
+- Preserved the full 1.5 TPS recovery gap by clamping custom pause thresholds to 18.5, and restored safe defaults for non-finite values.
+
 ## [1.6.4] - 2026-10-08
 
 ### Fixed

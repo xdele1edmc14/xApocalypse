@@ -86,11 +86,14 @@ public class PerformanceWatchdog {
             // the thresholds were hardcoded 10/15). Pause new spawns below the threshold; resume once
             // TPS recovers a little above it (hysteresis avoids rapid flapping around the threshold).
             double tpsThreshold = plugin.getConfig().getDouble("performance.tps-threshold", 15.0);
+            if (!Double.isFinite(tpsThreshold)) tpsThreshold = 15.0;
+            tpsThreshold = Math.max(0.0, Math.min(18.5, tpsThreshold));
+            double resumeThreshold = tpsThreshold + 1.5;
 
             if (currentTPS < tpsThreshold) {
                 plugin.debugLog("Low TPS: " + currentTPS + " (< " + tpsThreshold + ") - pausing spawning");
                 pauseAllSpawning();
-            } else if (currentTPS >= tpsThreshold + 1.5) {
+            } else if (currentTPS >= resumeThreshold) {
                 resumeSpawning();
             }
 
@@ -132,9 +135,11 @@ public class PerformanceWatchdog {
     }
 
     private int countZombiesInWorld(World world) {
-        // world.getEntitiesByClass is already filtered to Zombies
-        // .size() is much faster than running a manual 'for' loop
-        return world.getEntitiesByClass(Zombie.class).size();
+        int count = 0;
+        for (Zombie zombie : world.getEntitiesByClass(Zombie.class)) {
+            if (isManagedZombie(zombie)) count++;
+        }
+        return count;
     }
 
     private void pauseAllSpawning() {
@@ -289,7 +294,7 @@ public class PerformanceWatchdog {
     }
 
     private boolean isManagedZombie(Zombie zombie) {
-        if (plugin.getUtils() == null || !plugin.getUtils().isCustomZombie(zombie)) return false;
+        if (plugin.getUtils() == null || !plugin.getUtils().isManagedZombie(zombie)) return false;
         MythicMobsManager mythic = plugin.getMythicMobsManager();
         return mythic == null || !mythic.isMythicMob(zombie);
     }

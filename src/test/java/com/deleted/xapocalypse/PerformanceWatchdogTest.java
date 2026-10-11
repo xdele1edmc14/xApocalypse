@@ -7,18 +7,110 @@ import org.bukkit.entity.Player;
 import org.bukkit.entity.Zombie;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 
+import java.lang.reflect.Method;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class PerformanceWatchdogTest {
+
+    @Test
+    void nonFiniteConfiguredThresholdFallsBackToSafeDefault() throws Exception {
+        assertMalformedThresholdFallsBack(Double.NaN);
+        assertMalformedThresholdFallsBack(Double.POSITIVE_INFINITY);
+    }
+
+    @Test
+    void highConfiguredThresholdCanRecoverAtMaximumServerTps() throws Exception {
+        xApocalypse plugin = mock(xApocalypse.class);
+        FileConfiguration config = mock(FileConfiguration.class);
+        when(plugin.getConfig()).thenReturn(config);
+        when(config.getLong(anyString(), anyLong())).thenAnswer(i -> i.getArgument(1));
+        when(config.getDouble("performance.tps-threshold", 15.0)).thenReturn(19.5);
+
+        PerformanceWatchdog watchdog = new PerformanceWatchdog(plugin);
+        Method checkPerformance = PerformanceWatchdog.class.getDeclaredMethod("checkPerformance");
+        checkPerformance.setAccessible(true);
+
+        try (MockedStatic<org.bukkit.Bukkit> bukkit = mockStatic(org.bukkit.Bukkit.class)) {
+            bukkit.when(org.bukkit.Bukkit::getTPS)
+                    .thenReturn(new double[]{18.0}, new double[]{20.0});
+            bukkit.when(org.bukkit.Bukkit::getWorlds).thenReturn(List.of());
+
+            checkPerformance.invoke(watchdog);
+            assertTrue(watchdog.isSpawningPaused());
+
+            checkPerformance.invoke(watchdog);
+            assertFalse(watchdog.isSpawningPaused());
+        }
+    }
+
+    @Test
+    void thresholdAboveMaximumTpsIsClampedAndCanRecover() throws Exception {
+        xApocalypse plugin = mock(xApocalypse.class);
+        FileConfiguration config = mock(FileConfiguration.class);
+        when(plugin.getConfig()).thenReturn(config);
+        when(config.getLong(anyString(), anyLong())).thenAnswer(i -> i.getArgument(1));
+        when(config.getDouble("performance.tps-threshold", 15.0)).thenReturn(25.0);
+
+        PerformanceWatchdog watchdog = new PerformanceWatchdog(plugin);
+        Method checkPerformance = PerformanceWatchdog.class.getDeclaredMethod("checkPerformance");
+        checkPerformance.setAccessible(true);
+        try (MockedStatic<org.bukkit.Bukkit> bukkit = mockStatic(org.bukkit.Bukkit.class)) {
+            bukkit.when(org.bukkit.Bukkit::getTPS)
+                    .thenReturn(new double[]{19.0}, new double[]{20.0});
+            bukkit.when(org.bukkit.Bukkit::getWorlds).thenReturn(List.of());
+
+            checkPerformance.invoke(watchdog);
+            assertFalse(watchdog.isSpawningPaused());
+
+            checkPerformance.invoke(watchdog);
+            assertFalse(watchdog.isSpawningPaused());
+        }
+    }
+
+    @Test
+    void vanillaZombieDoesNotCauseManagedZombieCulling() throws Exception {
+        xApocalypse plugin = mock(xApocalypse.class);
+        FileConfiguration config = mock(FileConfiguration.class);
+        xApocalypseUtils utils = mock(xApocalypseUtils.class);
+        World world = mock(World.class);
+        Zombie vanillaZombie = mock(Zombie.class);
+        Zombie managedZombie = mock(Zombie.class);
+        when(plugin.getConfig()).thenReturn(config);
+        when(plugin.getUtils()).thenReturn(utils);
+        when(plugin.isWorldEnabled(world)).thenReturn(true);
+        when(config.getLong(anyString(), anyLong())).thenAnswer(i -> i.getArgument(1));
+        when(config.getDouble("performance.tps-threshold", 15.0)).thenReturn(15.0);
+        when(config.getInt("performance.max-total-zombies", 300)).thenReturn(1);
+        when(world.getEntitiesByClass(Zombie.class))
+                .thenReturn(List.of(vanillaZombie, managedZombie));
+        when(world.getPlayers()).thenReturn(List.of());
+        when(utils.isCustomZombie(managedZombie)).thenReturn(true);
+        when(utils.isManagedZombie(managedZombie)).thenReturn(true);
+
+        PerformanceWatchdog watchdog = new PerformanceWatchdog(plugin);
+        Method checkPerformance = PerformanceWatchdog.class.getDeclaredMethod("checkPerformance");
+        checkPerformance.setAccessible(true);
+        try (MockedStatic<org.bukkit.Bukkit> bukkit = mockStatic(org.bukkit.Bukkit.class)) {
+            bukkit.when(org.bukkit.Bukkit::getTPS).thenReturn(new double[]{20.0});
+            bukkit.when(org.bukkit.Bukkit::getWorlds).thenReturn(List.of(world));
+            checkPerformance.invoke(watchdog);
+        }
+
+        verify(managedZombie, never()).remove();
+    }
 
     @Test
     void lodPassSnapshotsPlayerCoordinatesOnceAndZombieCoordinatesOnce() {
@@ -34,8 +126,8 @@ class PerformanceWatchdogTest {
         Player second = playerAt(world, 100, 64, 100);
         Zombie firstZombie = zombieAt(world, 10, 64, 10);
         Zombie secondZombie = zombieAt(world, 20, 64, 20);
-        when(utils.isCustomZombie(firstZombie)).thenReturn(true);
-        when(utils.isCustomZombie(secondZombie)).thenReturn(true);
+        when(utils.isManagedZombie(firstZombie)).thenReturn(true);
+        when(utils.isManagedZombie(secondZombie)).thenReturn(true);
         List<Player> players = List.of(first, second);
 
         PerformanceWatchdog watchdog = new PerformanceWatchdog(plugin);
@@ -55,6 +147,30 @@ class PerformanceWatchdogTest {
         when(player.getY()).thenReturn(y);
         when(player.getZ()).thenReturn(z);
         return player;
+    }
+
+    private static void assertMalformedThresholdFallsBack(double threshold) throws Exception {
+        xApocalypse plugin = mock(xApocalypse.class);
+        FileConfiguration config = mock(FileConfiguration.class);
+        when(plugin.getConfig()).thenReturn(config);
+        when(config.getLong(anyString(), anyLong())).thenAnswer(i -> i.getArgument(1));
+        when(config.getDouble("performance.tps-threshold", 15.0)).thenReturn(threshold);
+
+        PerformanceWatchdog watchdog = new PerformanceWatchdog(plugin);
+        Method checkPerformance = PerformanceWatchdog.class.getDeclaredMethod("checkPerformance");
+        checkPerformance.setAccessible(true);
+
+        try (MockedStatic<org.bukkit.Bukkit> bukkit = mockStatic(org.bukkit.Bukkit.class)) {
+            bukkit.when(org.bukkit.Bukkit::getTPS)
+                    .thenReturn(new double[]{10.0}, new double[]{20.0});
+            bukkit.when(org.bukkit.Bukkit::getWorlds).thenReturn(List.of());
+
+            checkPerformance.invoke(watchdog);
+            assertTrue(watchdog.isSpawningPaused());
+
+            checkPerformance.invoke(watchdog);
+            assertFalse(watchdog.isSpawningPaused());
+        }
     }
 
     private static Zombie zombieAt(World world, double x, double y, double z) {

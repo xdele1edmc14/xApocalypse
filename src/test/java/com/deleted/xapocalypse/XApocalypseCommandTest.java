@@ -8,6 +8,8 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Zombie;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.scheduler.BukkitTask;
 import org.junit.jupiter.api.Test;
@@ -47,6 +49,37 @@ class XApocalypseCommandTest {
     }
 
     @Test
+    void fullInventoryIsNotPartiallyModifiedByItemCommand() {
+        xApocalypse plugin = mock(xApocalypse.class);
+        MessageManager messages = mock(MessageManager.class);
+        ImmunityManager immunity = mock(ImmunityManager.class);
+        Player player = mock(Player.class);
+        PlayerInventory inventory = mock(PlayerInventory.class);
+        ItemStack guts = mock(ItemStack.class);
+        ItemStack[] fullStorage = new ItemStack[36];
+        for (int slot = 0; slot < fullStorage.length; slot++) {
+            fullStorage[slot] = mock(ItemStack.class);
+            org.bukkit.Material material = mock(org.bukkit.Material.class);
+            when(material.isAir()).thenReturn(false);
+            when(fullStorage[slot].getType()).thenReturn(material);
+        }
+        when(plugin.getMessages()).thenReturn(messages);
+        when(plugin.getImmunity()).thenReturn(immunity);
+        when(plugin.isZombieGutsEnabled()).thenReturn(true);
+        when(player.hasPermission("xapocalypse.admin")).thenReturn(true);
+        when(player.getInventory()).thenReturn(inventory);
+        when(inventory.getStorageContents()).thenReturn(fullStorage);
+        when(immunity.createZombieGutsItem(1)).thenReturn(guts);
+        when(guts.getAmount()).thenReturn(1);
+        when(guts.getMaxStackSize()).thenReturn(64);
+
+        new xApocalypseCommand(plugin).onCommand(
+                player, mock(Command.class), "xa", new String[]{"item", "zombie_guts"});
+
+        verify(inventory, never()).addItem(guts);
+    }
+
+    @Test
     void adminSpawnNeverExceedsRemainingWorldCapacity() {
         CommandFixture fixture = commandFixture(30, 28);
         BukkitScheduler scheduler = mock(BukkitScheduler.class);
@@ -63,6 +96,26 @@ class XApocalypseCommandTest {
         }
 
         verify(fixture.world, atMost(2)).spawnEntity(any(Location.class), eq(EntityType.ZOMBIE));
+    }
+
+    @Test
+    void vanillaZombiesDoNotBlockAdminSpawnCapacity() {
+        CommandFixture fixture = commandFixture(1, 1);
+        when(fixture.utils.countManagedZombies(fixture.world)).thenReturn(0);
+        BukkitScheduler scheduler = mock(BukkitScheduler.class);
+        BukkitTask task = mock(BukkitTask.class);
+        when(scheduler.runTaskTimer(eq(fixture.plugin), any(Runnable.class), eq(1L), eq(1L)))
+                .thenReturn(task);
+
+        try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
+            bukkit.when(Bukkit::getScheduler).thenReturn(scheduler);
+            bukkit.when(() -> Bukkit.getPlayer(fixture.playerId)).thenReturn(fixture.player);
+            fixture.command.onCommand(fixture.player, mock(Command.class), "xa",
+                    new String[]{"spawn", "normal", "1", "5"});
+            fixture.command.runAdminSpawnTick();
+        }
+
+        verify(fixture.world).spawnEntity(any(Location.class), eq(EntityType.ZOMBIE));
     }
 
     @Test
@@ -226,6 +279,7 @@ class XApocalypseCommandTest {
         List<Zombie> existingZombies = new ArrayList<>();
         for (int i = 0; i < existing; i++) existingZombies.add(mock(Zombie.class));
         when(world.getEntitiesByClass(Zombie.class)).thenReturn(existingZombies);
+        when(utils.countManagedZombies(world)).thenReturn(existing);
         when(world.spawnEntity(any(Location.class), eq(EntityType.ZOMBIE))).thenReturn(zombie);
         when(player.hasPermission(anyString())).thenReturn(true);
         when(player.getUniqueId()).thenReturn(playerId);
@@ -236,11 +290,11 @@ class XApocalypseCommandTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         return new CommandFixture(new xApocalypseCommand(plugin), plugin, player, playerId,
-                world, spawner, mythic);
+                world, spawner, mythic, utils);
     }
 
     private record CommandFixture(
             xApocalypseCommand command, xApocalypse plugin, Player player, UUID playerId,
-            World world, UndeadSpawner spawner, MythicMobsManager mythic) {
+            World world, UndeadSpawner spawner, MythicMobsManager mythic, xApocalypseUtils utils) {
     }
 }

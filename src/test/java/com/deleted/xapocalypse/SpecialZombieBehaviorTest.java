@@ -1,7 +1,9 @@
 package com.deleted.xapocalypse;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.Server;
 import org.bukkit.World;
 import org.bukkit.block.Block;
@@ -10,14 +12,26 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.LlamaSpit;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Player;
 import org.bukkit.entity.Zombie;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.entity.EntityCombustByEntityEvent;
+import org.bukkit.event.entity.EntityCombustEvent;
+import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.scheduler.BukkitScheduler;
+import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Vector;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.MockedStatic;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
@@ -25,8 +39,10 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.EnumSet;
+import java.util.Map;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -36,7 +52,10 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.times;
@@ -44,12 +63,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class SpecialZombieBehaviorTest {
+    private xApocalypse plugin;
     private xApocalypseUtils utils;
     private PluginManager pluginManager;
 
     @BeforeEach
     void setUp() throws Exception {
-        xApocalypse plugin = mock(xApocalypse.class);
+        plugin = mock(xApocalypse.class);
         Server server = mock(Server.class);
         pluginManager = mock(PluginManager.class);
         FileConfiguration config = mock(FileConfiguration.class);
@@ -236,6 +256,194 @@ class SpecialZombieBehaviorTest {
         tickStrict("tickNurseAI", nurse);
 
         verify(nurse, times(1)).getNearbyEntities(anyDouble(), anyDouble(), anyDouble());
+    }
+
+    @Test
+    void breakingTemporaryWebCannotGenerateFreeDrops() throws Exception {
+        Block temporaryWeb = mock(Block.class);
+        BlockData originalAir = mock(BlockData.class);
+        temporaryWebs().put(temporaryWeb, originalAir);
+
+        when(plugin.getUtils()).thenReturn(utils);
+        BlockBreakEvent event = new BlockBreakEvent(temporaryWeb, mock(Player.class));
+        assertTrue(event.isDropItems());
+
+        new xApocalypseListener(plugin).onTemporaryWebBreak(event);
+
+        assertFalse(event.isDropItems());
+        org.junit.jupiter.api.Assertions.assertEquals(0, event.getExpToDrop());
+        assertFalse(temporaryWebs().containsKey(temporaryWeb));
+    }
+
+    @Test
+    void bursterCannotBreakBlocksWhenFuseEndsInsideClaim() throws Exception {
+        World world = mock(World.class);
+        Location explosionLocation = new Location(world, 12, 64, 12);
+        Zombie burster = mock(Zombie.class);
+        Player target = mock(Player.class);
+        BukkitScheduler scheduler = mock(BukkitScheduler.class);
+        BukkitTask task = mock(BukkitTask.class);
+        ArgumentCaptor<Runnable> fuse = ArgumentCaptor.forClass(Runnable.class);
+
+        setField("bursterFuseTicks", 1);
+        setField("bursterBreakBlocks", true);
+        setField("bursterPower", 3.0f);
+        when(plugin.isInsideClaim(explosionLocation)).thenReturn(true);
+        when(burster.getWorld()).thenReturn(world);
+        when(target.getWorld()).thenReturn(world);
+        when(burster.getLocation()).thenReturn(explosionLocation);
+        when(target.getLocation()).thenReturn(explosionLocation);
+        when(burster.getUniqueId()).thenReturn(UUID.randomUUID());
+        when(burster.isValid()).thenReturn(true);
+        when(burster.isDead()).thenReturn(false);
+        when(scheduler.runTaskTimer(eq(plugin), any(Runnable.class), eq(0L), eq(1L)))
+                .thenReturn(task);
+
+        try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
+            bukkit.when(Bukkit::getScheduler).thenReturn(scheduler);
+            utils.handleBursterTarget(burster, target);
+            verify(scheduler).runTaskTimer(eq(plugin), fuse.capture(), eq(0L), eq(1L));
+            fuse.getValue().run();
+        }
+
+        verify(world).createExplosion(explosionLocation, 3.0f, false, false);
+    }
+
+    @Test
+    void ordinaryCustomZombieIsNotImmuneToFireDamage() {
+        xApocalypseUtils listenerUtils = mock(xApocalypseUtils.class);
+        Zombie runner = mock(Zombie.class);
+        EntityDamageEvent event = mock(EntityDamageEvent.class);
+        when(plugin.getUtils()).thenReturn(listenerUtils);
+        when(listenerUtils.getZombieType(runner)).thenReturn(xApocalypseUtils.ZombieType.RUNNER);
+        when(event.getEntity()).thenReturn(runner);
+        when(event.getCause()).thenReturn(EntityDamageEvent.DamageCause.FIRE);
+
+        new xApocalypseListener(plugin).onEntityDamage(event);
+
+        verify(event, never()).setCancelled(true);
+    }
+
+    @Test
+    void daylightSettingDoesNotBlockWeaponFire() {
+        xApocalypseUtils listenerUtils = mock(xApocalypseUtils.class);
+        FileConfiguration config = plugin.getConfig();
+        World world = mock(World.class);
+        Zombie zombie = mock(Zombie.class);
+        EntityCombustByEntityEvent weaponFire = mock(EntityCombustByEntityEvent.class);
+        EntityCombustEvent sunlight = mock(EntityCombustEvent.class);
+        when(plugin.getUtils()).thenReturn(listenerUtils);
+        when(plugin.isWorldEnabled(world)).thenReturn(true);
+        when(config.getBoolean("zombie-settings.allow-daylight-burning", false)).thenReturn(false);
+        when(zombie.getWorld()).thenReturn(world);
+        when(world.getTime()).thenReturn(6_000L);
+        when(listenerUtils.getZombieType(zombie)).thenReturn(xApocalypseUtils.ZombieType.NORMAL);
+        when(listenerUtils.isManagedZombie(zombie)).thenReturn(true);
+        when(weaponFire.getEntity()).thenReturn(zombie);
+        when(sunlight.getEntity()).thenReturn(zombie);
+        xApocalypseListener listener = new xApocalypseListener(plugin);
+
+        listener.onEntityCombust(weaponFire);
+        listener.onEntityCombust(sunlight);
+
+        verify(weaponFire, never()).setCancelled(true);
+        verify(sunlight).setCancelled(true);
+    }
+
+    @Test
+    void daylightProtectionDoesNotMakeVanillaZombiesSunproof() {
+        xApocalypseUtils listenerUtils = mock(xApocalypseUtils.class);
+        FileConfiguration config = plugin.getConfig();
+        World world = mock(World.class);
+        Zombie vanillaZombie = mock(Zombie.class);
+        EntityCombustEvent sunlight = mock(EntityCombustEvent.class);
+        when(plugin.getUtils()).thenReturn(listenerUtils);
+        when(plugin.isWorldEnabled(world)).thenReturn(true);
+        when(config.getBoolean("zombie-settings.allow-daylight-burning", false)).thenReturn(false);
+        when(vanillaZombie.getWorld()).thenReturn(world);
+        when(world.getTime()).thenReturn(6_000L);
+        when(sunlight.getEntity()).thenReturn(vanillaZombie);
+        when(listenerUtils.isManagedZombie(vanillaZombie)).thenReturn(false);
+
+        new xApocalypseListener(plugin).onEntityCombust(sunlight);
+
+        verify(sunlight, never()).setCancelled(true);
+    }
+
+    @Test
+    void zeroDamageHitDoesNotApplySpecialZombieEffect() {
+        xApocalypseUtils listenerUtils = mock(xApocalypseUtils.class);
+        Zombie webber = mock(Zombie.class);
+        Player player = mock(Player.class);
+        EntityDamageByEntityEvent event = mock(EntityDamageByEntityEvent.class);
+        when(plugin.getUtils()).thenReturn(listenerUtils);
+        when(listenerUtils.getZombieType(webber)).thenReturn(xApocalypseUtils.ZombieType.WEBBER);
+        when(event.getDamager()).thenReturn(webber);
+        when(event.getEntity()).thenReturn(player);
+        when(event.getFinalDamage()).thenReturn(0.0);
+
+        new xApocalypseListener(plugin).onEntityDamageByEntity(event);
+
+        verify(listenerUtils, never()).handleWebberHit(webber, player);
+    }
+
+    @Test
+    void cancelledTargetEventDoesNotPrimeBurster() {
+        xApocalypseUtils listenerUtils = mock(xApocalypseUtils.class);
+        Zombie burster = mock(Zombie.class);
+        Player player = mock(Player.class);
+        EntityTargetLivingEntityEvent event = mock(EntityTargetLivingEntityEvent.class);
+        when(plugin.getUtils()).thenReturn(listenerUtils);
+        when(listenerUtils.getZombieType(burster)).thenReturn(xApocalypseUtils.ZombieType.BURSTER);
+        when(event.getEntity()).thenReturn(burster);
+        when(event.getTarget()).thenReturn(player);
+        when(event.isCancelled()).thenReturn(true);
+
+        new xApocalypseListener(plugin).onEntityTarget(event);
+
+        verify(listenerUtils, never()).handleBursterTarget(burster, player);
+    }
+
+    @Test
+    void classlessPluginZombieStillReceivesOwnershipMarker() {
+        FileConfiguration config = plugin.getConfig();
+        Zombie zombie = mock(Zombie.class);
+        PersistentDataContainer data = mock(PersistentDataContainer.class);
+        when(config.getBoolean("zombie-classes.enabled", true)).thenReturn(false);
+        when(zombie.getPersistentDataContainer()).thenReturn(data);
+
+        utils.assignZombieType(zombie);
+
+        verify(data).set(
+                any(NamespacedKey.class), eq(PersistentDataType.BYTE), eq((byte) 1));
+    }
+
+    @Test
+    void commandSpawnedVanillaZombieIsNotAdoptedByPlugin() {
+        xApocalypseUtils listenerUtils = mock(xApocalypseUtils.class);
+        HordeManager hordeManager = mock(HordeManager.class);
+        World world = mock(World.class);
+        Zombie zombie = mock(Zombie.class);
+        CreatureSpawnEvent event = mock(CreatureSpawnEvent.class);
+        when(plugin.getUtils()).thenReturn(listenerUtils);
+        when(plugin.getHordeManager()).thenReturn(hordeManager);
+        when(plugin.isWorldEnabled(world)).thenReturn(true);
+        when(event.getLocation()).thenReturn(new Location(world, 0, 64, 0));
+        when(event.getEntity()).thenReturn(zombie);
+        when(event.getSpawnReason()).thenReturn(CreatureSpawnEvent.SpawnReason.COMMAND);
+        when(zombie.isAdult()).thenReturn(true);
+        when(zombie.getType()).thenReturn(org.bukkit.entity.EntityType.ZOMBIE);
+
+        new xApocalypseListener(plugin).onEntitySpawn(event);
+
+        verify(listenerUtils, never()).assignZombieType(zombie);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<Block, BlockData> temporaryWebs() throws Exception {
+        Field field = xApocalypseUtils.class.getDeclaredField("temporaryWebBlocks");
+        field.setAccessible(true);
+        return (Map<Block, BlockData>) field.get(utils);
     }
 
     private Zombie minerAt(World world, double x, double y, double z) {

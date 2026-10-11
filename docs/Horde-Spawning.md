@@ -53,7 +53,7 @@ Where `multiplier` combines:
 The result is then clamped twice:
 
 1. `apocalypse-settings.max-single-horde-size` (default **30**) — the most one player can get in a single cycle.
-2. `performance.max-total-zombies` (default **300**) — the global safety cap.
+2. `performance.max-total-zombies` (default **300**) — the global xApocalypse-managed zombie safety cap. Vanilla mobs, NPCs and third-party mobs do not consume it.
 
 > The single-horde cap is applied **before** the spawn loop runs, which prevents scent × Blood Moon stacking from triggering hundreds of expensive surface-finding calls per player per cycle.
 

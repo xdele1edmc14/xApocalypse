@@ -153,10 +153,12 @@ public class xApocalypseCommand implements CommandExecutor {
         if (args.length >= 1 && args[0].equalsIgnoreCase("zombie_guts") && plugin.isZombieGutsEnabled()) {
             int amount = parseItemAmount(args);
             ItemStack guts = plugin.getImmunity().createZombieGutsItem(amount);
-            if (!targetPlayer.getInventory().addItem(guts).isEmpty()) {
-                sender.sendMessage("§c" + targetPlayer.getName() + "'s inventory is full.");
+            if (!canFitInStorage(targetPlayer, guts)) {
+                sender.sendMessage("§c" + targetPlayer.getName()
+                        + "'s inventory does not have enough space.");
                 return true;
             }
+            targetPlayer.getInventory().addItem(guts);
 
             if (sender instanceof Player) {
                 targetPlayer.sendMessage(messageManager.getWithPrefix("commands.item.received", messageManager.get("immunity.item-name")));
@@ -167,6 +169,22 @@ public class xApocalypseCommand implements CommandExecutor {
         }
         sender.sendMessage(messageManager.getWithPrefix("commands.item.unknown", args.length > 0 ? args[0] : "none"));
         return true;
+    }
+
+    private boolean canFitInStorage(Player player, ItemStack item) {
+        int remaining = item.getAmount();
+        int stackLimit = item.getMaxStackSize();
+
+        for (ItemStack stored : player.getInventory().getStorageContents()) {
+            if (stored == null || stored.getType().isAir()) {
+                remaining -= stackLimit;
+            } else if (stored.isSimilar(item)) {
+                remaining -= Math.max(0, stackLimit - stored.getAmount());
+            }
+
+            if (remaining <= 0) return true;
+        }
+        return false;
     }
 
     static int parseItemAmount(String[] args) {
@@ -291,7 +309,7 @@ public class xApocalypseCommand implements CommandExecutor {
         }
 
         int remainingCapacity = Math.max(0,
-                maxZombies - player.getWorld().getEntitiesByClass(Zombie.class).size());
+                maxZombies - utils.countManagedZombies(player.getWorld()));
         count = Math.min(count, remainingCapacity);
 
         if (typeArg.equals("HORDE")) {
@@ -439,7 +457,7 @@ public class xApocalypseCommand implements CommandExecutor {
             int maxZombies = Math.max(0,
                     plugin.getConfig().getInt("performance.max-total-zombies", 300));
             int capacity = Math.max(0,
-                    maxZombies - player.getWorld().getEntitiesByClass(Zombie.class).size());
+                    maxZombies - utils.countManagedZombies(player.getWorld()));
             if (capacity <= 0) {
                 probesRemaining = 0;
                 return;

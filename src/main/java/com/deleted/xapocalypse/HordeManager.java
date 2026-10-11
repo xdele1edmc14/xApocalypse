@@ -128,7 +128,7 @@ public class HordeManager {
 
         // Cap with max-total-zombies instead of scent-system.spawn-cap
         int spawnCap = Math.max(0, plugin.getConfig().getInt("performance.max-total-zombies", 300));
-        int existingZombies = world.getEntitiesByClass(Zombie.class).size();
+        int existingZombies = utils.countManagedZombies(world);
         int availableSlots = Math.max(0, spawnCap - existingZombies);
         finalHordeSize = Math.min(finalHordeSize, availableSlots);
 

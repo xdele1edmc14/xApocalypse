@@ -185,7 +185,7 @@ public class xApocalypseListener implements Listener {
             }
         }
 
-        if (entity instanceof Zombie zombie) {
+        if (entity instanceof Zombie zombie && isMobListSpawnReason(event.getSpawnReason())) {
             if (!plugin.isAllowBabyZombies() && !zombie.isAdult()) { event.setCancelled(true); return; }
             if (!plugin.isAllowZombieVillagers() && zombie.getType() == EntityType.ZOMBIE_VILLAGER) { event.setCancelled(true); return; }
 
@@ -224,18 +224,22 @@ public class xApocalypseListener implements Listener {
         return false;
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onImmunePlayerTarget(EntityTargetLivingEntityEvent event) {
+        if (!(event.getEntity() instanceof Zombie zombie)) return;
+        if (!(event.getTarget() instanceof Player player)) return;
+
+        if (plugin.isZombieGutsEnabled() && immunity.isImmune(player.getUniqueId())) {
+            event.setCancelled(true);
+            zombie.setTarget(null);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onEntityTarget(EntityTargetLivingEntityEvent event) {
+        if (event.isCancelled()) return;
         if (event.getEntity() instanceof Zombie zombie
                 && event.getTarget() instanceof Player player) {
-
-            if (plugin.isZombieGutsEnabled() && immunity.isImmune(player.getUniqueId())) {
-                event.setCancelled(true);
-                zombie.setTarget(null);
-                return;
-            }
-
-            // Handle BURSTER target event
             xApocalypseUtils.ZombieType type = utils.getZombieType(zombie);
             if (type == xApocalypseUtils.ZombieType.BURSTER) {
                 utils.handleBursterTarget(zombie, player);
@@ -243,9 +247,12 @@ public class xApocalypseListener implements Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onTemporaryWebBreak(BlockBreakEvent event) {
-        utils.forgetTemporaryWeb(event.getBlock());
+        if (utils.forgetTemporaryWeb(event.getBlock())) {
+            event.setDropItems(false);
+            event.setExpToDrop(0);
+        }
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -253,27 +260,28 @@ public class xApocalypseListener implements Listener {
         utils.forgetTemporaryWeb(event.getBlock());
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onEntityDamage(EntityDamageEvent event) {
         if (!(event.getEntity() instanceof Zombie zombie)) return;
 
-        // CRITICAL FIX: Prevent fire damage to custom zombies
-        if (event.getCause() == DamageCause.FIRE ||
-            event.getCause() == DamageCause.FIRE_TICK ||
-            event.getCause() == DamageCause.LAVA) {
+        DamageCause cause = event.getCause();
+        if (cause != DamageCause.FIRE
+                && cause != DamageCause.FIRE_TICK
+                && cause != DamageCause.LAVA) return;
 
-            xApocalypseUtils.ZombieType type = utils.getZombieType(zombie);
-            if (type != null && type != xApocalypseUtils.ZombieType.NORMAL) {
-                // Cancel fire damage for all custom zombie types
-                event.setCancelled(true);
-                zombie.setFireTicks(0); // Extinguish any existing fire
-                plugin.debugLog("Prevented fire damage to " + type + " zombie");
-            }
+        xApocalypseUtils.ZombieType type = utils.getZombieType(zombie);
+        boolean hasFireResistance = zombie.getActivePotionEffects().stream()
+                .anyMatch(effect -> effect.getType()
+                        == org.bukkit.potion.PotionEffectType.FIRE_RESISTANCE);
+        if (type == xApocalypseUtils.ZombieType.SCORCHED || hasFireResistance) {
+            event.setCancelled(true);
+            zombie.setFireTicks(0);
         }
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
+        if (event.getFinalDamage() <= 0.0) return;
         if (event.getDamager() instanceof Zombie zombie && event.getEntity() instanceof Player player) {
             xApocalypseUtils.ZombieType type = utils.getZombieType(zombie);
             if (type == null) return;
@@ -319,7 +327,7 @@ public class xApocalypseListener implements Listener {
         }
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onEntityCombust(EntityCombustEvent event) {
         if (!plugin.isWorldEnabled(event.getEntity().getWorld())) return;
         if (event.getEntity() instanceof Zombie zombie) {
@@ -336,11 +344,18 @@ public class xApocalypseListener implements Listener {
                 return;
             }
 
-            // For other zombie types, prevent burning during day if config disallows daylight burning
+            // Only the base environmental event represents sunlight. Fire Aspect, flaming
+            // projectiles, lava and burning blocks use the entity/block subclasses.
+            boolean daylightCombustion = !(event instanceof EntityCombustByEntityEvent)
+                    && !(event instanceof EntityCombustByBlockEvent);
             long time = zombie.getWorld().getTime();
-            boolean isDay = time > 0 && time < 12300;
-            if (isDay && !plugin.getConfig().getBoolean("zombie-settings.allow-daylight-burning", true)) {
+            boolean isDay = time >= 0 && time < 12300;
+            if (daylightCombustion && isDay
+                    && utils.isManagedZombie(zombie)
+                    && !plugin.getConfig().getBoolean(
+                            "zombie-settings.allow-daylight-burning", false)) {
                 event.setCancelled(true);
+                zombie.setFireTicks(0);
             }
         }
     }

@@ -1,4 +1,4 @@
-# xApocalypse v1.6.4 - Balanced Configuration
+# xApocalypse v1.6.5 - Balanced Configuration
 
 debug-mode: false  # Set to true for detailed console logs
 
@@ -141,7 +141,7 @@ zombie-settings:
   speed: 0.32    # Movement speed
   allow-baby-zombies: false
   allow-zombie-villagers: true
-  allow-daylight-burning: true   # If false, custom (non-NORMAL) zombies are protected from burning in daylight
+  allow-daylight-burning: false  # If false, xApocalypse-managed zombies are protected from sunlight only
   zombie-guts:
     enabled: true  # Master switch: consume to ignore zombies 10 min (reduces max health to 5 hearts)
     # Rare chance for a slain zombie to drop Zombie Guts (requires the master switch above).
@@ -259,7 +259,7 @@ bloodmoon:
 
 # Performance & Safety Guards
 performance:
-  max-total-zombies: 300        # Maximum total zombies per world (furthest are culled above this)
+  max-total-zombies: 300        # Maximum xApocalypse-managed zombies per world (furthest are culled above this)
   tps-threshold: 15.0           # Pause NEW zombie spawns when server TPS drops below this; resume once it recovers
   check-interval-ticks: 100     # How often to check performance (5 seconds)
 

@@ -193,7 +193,7 @@ zombie-settings:
 
 See **[Zombie Guts & Immunity](Zombie-Guts-and-Immunity.md)**.
 
-> The combust handler also reads `zombie-settings.allow-daylight-burning` (default behavior allows it for `NORMAL` zombies) — set it to control whether non-immune zombies burn in daylight.
+> `zombie-settings.allow-daylight-burning` defaults to `false`, protecting xApocalypse-managed zombies from sunlight. Vanilla zombies still burn normally, and ordinary xApocalypse classes still take Fire Aspect, lava, and other non-sunlight fire damage.
 
 ---
 
@@ -250,7 +250,7 @@ See **[Blood Moon](Blood-Moon.md)**.
 
 ```yaml
 performance:
-  max-total-zombies: 300       # global zombie cap per world (culls furthest over this)
+  max-total-zombies: 300       # xApocalypse-managed zombie cap per world
   tps-threshold: 15.0          # pause new spawns below this TPS; resume once it recovers
   check-interval-ticks: 100    # watchdog interval (100 ticks = 5 s)
 ```

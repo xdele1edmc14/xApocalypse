@@ -12,7 +12,7 @@ All stats are derived from the three base values in `zombie-settings`:
 
 During a [Blood Moon](Blood-Moon.md) these base values are multiplied before the per-class modifiers are applied.
 
-> 🔥 **Fire immunity:** every class **except `NORMAL`** is given permanent fire resistance, so custom zombies don't burn up in daylight. `NORMAL` zombies burn like vanilla.
+> 🔥 **Fire rules:** xApocalypse-managed zombies are protected from sunlight by default. Ordinary classes still take Fire Aspect, lava and other fire damage; only Scorched is fully fireproof. Set `zombie-settings.allow-daylight-burning: true` if managed zombies should burn in daylight.
 
 ---
 
@@ -136,7 +136,7 @@ The Veteran is **never** rolled from the random spawn pool.
 
 ## NORMAL (fallback)
 
-`NORMAL` is the plain vanilla-stat zombie used as a fallback — e.g. when `zombie-classes.enabled` is `false`, or if the spawn weights are misconfigured to total zero. It is the **only** type that does **not** receive fire immunity.
+`NORMAL` is the plain vanilla-stat xApocalypse zombie used as a fallback — e.g. when `zombie-classes.enabled` is `false`, or if the spawn weights are misconfigured to total zero. It follows the same sunlight setting as other managed zombies but has no full fire immunity.
 
 ---
 

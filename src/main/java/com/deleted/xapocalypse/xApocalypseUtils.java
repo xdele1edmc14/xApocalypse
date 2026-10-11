@@ -23,6 +23,7 @@ public class xApocalypseUtils {
     private final xApocalypse plugin;
 
     public static final NamespacedKey ZOMBIE_TYPE_KEY = new NamespacedKey("xapocalypse", "zombie_type");
+    public static final NamespacedKey MANAGED_ZOMBIE_KEY = new NamespacedKey("xapocalypse", "managed_zombie");
     public static final NamespacedKey LAST_HEAL_KEY = new NamespacedKey("xapocalypse", "last_heal");
     public static final NamespacedKey LAST_BREAK_KEY = new NamespacedKey("xapocalypse", "last_break");
     public static final NamespacedKey LAST_SPIT_KEY = new NamespacedKey("xapocalypse", "last_spit");
@@ -206,6 +207,8 @@ public class xApocalypseUtils {
     }
 
     public void assignZombieType(Zombie zombie) {
+        zombie.getPersistentDataContainer().set(
+                MANAGED_ZOMBIE_KEY, PersistentDataType.BYTE, (byte) 1);
         if (!plugin.getConfig().getBoolean("zombie-classes.enabled", true)) return;
         applyZombieType(zombie, getRandomZombieType());
     }
@@ -225,6 +228,8 @@ public class xApocalypseUtils {
     }
 
     public void applyZombieType(Zombie zombie, ZombieType type) {
+        zombie.getPersistentDataContainer().set(
+                MANAGED_ZOMBIE_KEY, PersistentDataType.BYTE, (byte) 1);
         zombie.getPersistentDataContainer().set(ZOMBIE_TYPE_KEY, PersistentDataType.STRING, type.name());
         // Tag zombies typed during an active blood moon so they can be cleaned up when it ends.
         // Guard on type != VETERAN: veteran promotion (transformToVeteran) re-runs this method on an
@@ -298,9 +303,6 @@ public class xApocalypseUtils {
                 zombie.setHealth(baseHealth);
                 setZombieStat(zombie, AttributeResolver.ATTACK_DAMAGE, baseDamage);
                 setZombieStat(zombie, AttributeResolver.MOVEMENT_SPEED, baseSpeed);
-                
-                // CRITICAL FIX: Add permanent fire resistance to all custom zombie types
-                zombie.addPotionEffect(new PotionEffect(PotionEffectType.FIRE_RESISTANCE, Integer.MAX_VALUE, 0, false, false));
             }
             case RUNNER -> {
                 // Fast but fragile
@@ -313,7 +315,6 @@ public class xApocalypseUtils {
                 zombie.setHealth(baseHealth * healthMult);
                 setZombieStat(zombie, AttributeResolver.ATTACK_DAMAGE, baseDamage * 0.9);
                 setZombieStat(zombie, AttributeResolver.MOVEMENT_SPEED, runnerSpeed);
-                applyFireResistance(zombie); // Bug 15 fix
             }
             case TANK -> {
                 // High HP, armored, knockback resistant
@@ -328,7 +329,6 @@ public class xApocalypseUtils {
                 setZombieStat(zombie, AttributeResolver.MOVEMENT_SPEED, baseSpeed * 0.85);
                 setZombieStat(zombie, AttributeResolver.KNOCKBACK_RESISTANCE, knockbackResist);
                 zombie.getEquipment().setChestplate(new ItemStack(Material.IRON_CHESTPLATE));
-                applyFireResistance(zombie); // Bug 15 fix
             }
             case MINER -> {
                 // Standard stats, focused on block breaking
@@ -336,7 +336,6 @@ public class xApocalypseUtils {
                 zombie.setHealth(baseHealth);
                 setZombieStat(zombie, AttributeResolver.ATTACK_DAMAGE, baseDamage);
                 setZombieStat(zombie, AttributeResolver.MOVEMENT_SPEED, baseSpeed);
-                applyFireResistance(zombie); // Bug 15 fix
             }
             case NURSE -> {
                 // Support zombie - lower damage, standard HP
@@ -344,7 +343,6 @@ public class xApocalypseUtils {
                 zombie.setHealth(baseHealth);
                 setZombieStat(zombie, AttributeResolver.ATTACK_DAMAGE, baseDamage * 0.7);
                 setZombieStat(zombie, AttributeResolver.MOVEMENT_SPEED, baseSpeed);
-                applyFireResistance(zombie); // Bug 15 fix
             }
             case SPITTER -> {
                 // Ranged attacker - lower HP, standard speed
@@ -352,7 +350,6 @@ public class xApocalypseUtils {
                 zombie.setHealth(baseHealth * 0.85);
                 setZombieStat(zombie, AttributeResolver.ATTACK_DAMAGE, baseDamage * 0.8);
                 setZombieStat(zombie, AttributeResolver.MOVEMENT_SPEED, baseSpeed);
-                applyFireResistance(zombie); // Bug 15 fix
             }
             case SCORCHED -> {
                 // Fire zombie - standard stats with fire aura
@@ -375,7 +372,6 @@ public class xApocalypseUtils {
                 zombie.setHealth(baseHealth);
                 setZombieStat(zombie, AttributeResolver.ATTACK_DAMAGE, baseDamage + attackBonus);
                 setZombieStat(zombie, AttributeResolver.MOVEMENT_SPEED, baseSpeed + speedBonus);
-                applyFireResistance(zombie); // Bug 15 fix
             }
             case VETERAN -> {
                 // Elite zombie - transformed from kills
@@ -385,7 +381,6 @@ public class xApocalypseUtils {
                 zombie.setHealth(baseHealth + healthAdd);
                 setZombieStat(zombie, AttributeResolver.ATTACK_DAMAGE, baseDamage + attackBonus);
                 setZombieStat(zombie, AttributeResolver.MOVEMENT_SPEED, baseSpeed * 1.1);
-                applyFireResistance(zombie); // Bug 15 fix
             }
             case WEBBER -> {
                 // Webber - places cobwebs on hit, holds string in off-hand
@@ -394,7 +389,6 @@ public class xApocalypseUtils {
                 setZombieStat(zombie, AttributeResolver.ATTACK_DAMAGE, baseDamage);
                 setZombieStat(zombie, AttributeResolver.MOVEMENT_SPEED, baseSpeed);
                 zombie.getEquipment().setItemInOffHand(new ItemStack(Material.STRING));
-                applyFireResistance(zombie); // Bug 15 fix
             }
             case BURSTER -> {
                 // Burster - explodes when close, lower HP
@@ -402,7 +396,6 @@ public class xApocalypseUtils {
                 zombie.setHealth(baseHealth * 0.8);
                 setZombieStat(zombie, AttributeResolver.ATTACK_DAMAGE, baseDamage * 0.5);
                 setZombieStat(zombie, AttributeResolver.MOVEMENT_SPEED, baseSpeed * 0.6);
-                applyFireResistance(zombie); // Bug 15 fix
             }
             case FROST -> {
                 // Frost - slows targets on hit, wears aqua chestplate
@@ -410,7 +403,6 @@ public class xApocalypseUtils {
                 zombie.setHealth(baseHealth);
                 setZombieStat(zombie, AttributeResolver.ATTACK_DAMAGE, baseDamage);
                 setZombieStat(zombie, AttributeResolver.MOVEMENT_SPEED, baseSpeed);
-                applyFireResistance(zombie); // Bug 15 fix
                 
                 // CRITICAL FIX: Only frost zombies get blue leather chestplate
                 ItemStack chestplate = new ItemStack(Material.LEATHER_CHESTPLATE);
@@ -428,13 +420,6 @@ public class xApocalypseUtils {
         if (instance != null) instance.setBaseValue(value);
     }
 
-    // Bug 15 fix: centralised helper so every non-NORMAL type gets fire resistance
-    // (onEntityCombust cancels sunlight burning only when this effect is present)
-    private void applyFireResistance(Zombie zombie) {
-        zombie.addPotionEffect(new PotionEffect(PotionEffectType.FIRE_RESISTANCE,
-                Integer.MAX_VALUE, 0, false, false));
-    }
-
     public ZombieType getZombieType(Zombie zombie) {
         String s = zombie.getPersistentDataContainer().get(ZOMBIE_TYPE_KEY, PersistentDataType.STRING);
         if (s == null) return null;
@@ -450,6 +435,24 @@ public class xApocalypseUtils {
     public boolean isCustomZombie(Zombie zombie) {
         return zombie != null
                 && zombie.getPersistentDataContainer().has(ZOMBIE_TYPE_KEY, PersistentDataType.STRING);
+    }
+
+    /** True for every zombie spawned and owned by xApocalypse, even when classes are disabled. */
+    public boolean isManagedZombie(Zombie zombie) {
+        if (zombie == null) return false;
+        return zombie.getPersistentDataContainer().has(
+                        MANAGED_ZOMBIE_KEY, PersistentDataType.BYTE)
+                // Legacy fallback for zombies saved before the ownership marker existed.
+                || zombie.getPersistentDataContainer().has(
+                        ZOMBIE_TYPE_KEY, PersistentDataType.STRING);
+    }
+
+    public int countManagedZombies(World world) {
+        int count = 0;
+        for (Zombie zombie : world.getEntitiesByClass(Zombie.class)) {
+            if (isManagedZombie(zombie)) count++;
+        }
+        return count;
     }
 
     public void tickZombieAI(Zombie zombie) {
@@ -804,7 +807,8 @@ public class xApocalypseUtils {
                     // Explode
                     Location loc = burster.getLocation();
                     burster.remove(); // Remove entity before explosion
-                    loc.getWorld().createExplosion(loc, bursterPower, false, bursterBreakBlocks);
+                    boolean mayBreakBlocks = bursterBreakBlocks && !plugin.isInsideClaim(loc);
+                    loc.getWorld().createExplosion(loc, bursterPower, false, mayBreakBlocks);
                     this.cancel();
                     activeBursterFuses.remove(id);
                 } else {
@@ -834,8 +838,8 @@ public class xApocalypseUtils {
         burster.getPersistentDataContainer().remove(BURSTER_PRIMED_KEY);
     }
 
-    public void forgetTemporaryWeb(Block block) {
-        temporaryWebBlocks.remove(block);
+    public boolean forgetTemporaryWeb(Block block) {
+        return temporaryWebBlocks.remove(block) != null;
     }
 
     private void restoreTemporaryWeb(Block block) {

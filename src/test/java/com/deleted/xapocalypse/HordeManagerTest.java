@@ -3,7 +3,11 @@ package com.deleted.xapocalypse;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Zombie;
 import org.junit.jupiter.api.Test;
@@ -60,6 +64,33 @@ class HordeManagerTest {
                 .spawnZombiesNearPlayer(player, false);
 
         verify(world, never()).getHighestBlockYAt(anyInt(), anyInt(), any(org.bukkit.HeightMap.class));
+    }
+
+    @Test
+    void vanillaZombieDoesNotConsumeManagedHordeCapacity() {
+        xApocalypse plugin = pluginWithHordeSize(1);
+        FileConfiguration config = plugin.getConfig();
+        xApocalypseUtils utils = mock(xApocalypseUtils.class);
+        UndeadSpawner spawner = mock(UndeadSpawner.class);
+        World world = mock(World.class);
+        Zombie vanillaZombie = mock(Zombie.class);
+        Zombie spawnedZombie = mock(Zombie.class);
+        Block block = mock(Block.class);
+        Player player = eligiblePlayer("capacity", world);
+        Location surface = new Location(world, 4, 70, 4);
+        when(config.getInt("performance.max-total-zombies", 300)).thenReturn(1);
+        when(config.getBoolean("apocalypse-settings.rising-animation", true)).thenReturn(false);
+        when(world.getEntitiesByClass(Zombie.class)).thenReturn(List.of(vanillaZombie));
+        when(world.getBlockAt(any(Location.class))).thenReturn(block);
+        when(world.getBlockAt(anyInt(), anyInt(), anyInt())).thenReturn(block);
+        when(block.getRelative(BlockFace.DOWN)).thenReturn(block);
+        when(block.getBlockData()).thenReturn(mock(BlockData.class));
+        when(spawner.getSurfaceSpawnLocation(any(Location.class))).thenReturn(surface);
+        when(world.spawnEntity(surface, EntityType.ZOMBIE)).thenReturn(spawnedZombie);
+
+        new HordeManager(plugin, utils, spawner).spawnZombiesNearPlayer(player, false);
+
+        verify(world).spawnEntity(surface, EntityType.ZOMBIE);
     }
 
     private static xApocalypse pluginWithHordeSize(int size) {
