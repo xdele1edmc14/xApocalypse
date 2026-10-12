@@ -15,6 +15,8 @@ import java.util.UUID;
 import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
@@ -25,6 +27,7 @@ import static org.mockito.Mockito.when;
 class BloodMoonLifecycleTest {
 
     private static final UUID WORLD_ID = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+    private static final UUID OTHER_WORLD_ID = UUID.fromString("11111111-2222-3333-4444-555555555555");
 
     @TempDir
     Path tempDir;
@@ -132,6 +135,96 @@ class BloodMoonLifecycleTest {
 
         verify(atmosphere).end();
         verify(atmosphere).suspend();
+    }
+
+    @Test
+    void invalidActiveWorldIdClearsThePersistedEvent() throws Exception {
+        YamlConfiguration data = persistedEventData();
+        data.set("bloodmoon.world-id", "not-a-uuid");
+        data.save(tempDir.resolve("BloodMoonData.yml").toFile());
+        when(atmosphere.isCurrentStateFormat()).thenReturn(true);
+
+        BloodMoonManager manager = new BloodMoonManager(plugin, atmosphere);
+        manager.load(tempDir.toFile());
+        manager.close();
+
+        assertFalse(manager.isPersisted());
+        assertFalse(manager.isForced());
+    }
+
+    @Test
+    void missingActiveWorldIdInCurrentStateClearsThePersistedEvent() throws Exception {
+        YamlConfiguration data = persistedEventData();
+        data.set("bloodmoon.world-id", null);
+        data.save(tempDir.resolve("BloodMoonData.yml").toFile());
+        when(atmosphere.isCurrentStateFormat()).thenReturn(true);
+
+        BloodMoonManager manager = new BloodMoonManager(plugin, atmosphere);
+        manager.load(tempDir.toFile());
+        manager.close();
+
+        assertFalse(manager.isPersisted());
+    }
+
+    @Test
+    void mismatchedAtmosphereSnapshotClearsThePersistedEvent() throws Exception {
+        YamlConfiguration data = persistedEventData();
+        data.save(tempDir.resolve("BloodMoonData.yml").toFile());
+        when(atmosphere.isCurrentStateFormat()).thenReturn(true);
+        when(atmosphere.snapshotWorldId()).thenReturn(OTHER_WORLD_ID);
+
+        BloodMoonManager manager = new BloodMoonManager(plugin, atmosphere);
+        manager.load(tempDir.toFile());
+        manager.close();
+
+        assertFalse(manager.isPersisted());
+    }
+
+    @Test
+    void legacyActiveStateWithoutAWorldIdStillMigratesOnce() throws Exception {
+        YamlConfiguration data = persistedEventData();
+        data.set("bloodmoon.world-id", null);
+        data.save(tempDir.resolve("BloodMoonData.yml").toFile());
+        when(atmosphere.isCurrentStateFormat()).thenReturn(false);
+
+        BloodMoonManager manager = new BloodMoonManager(plugin, atmosphere);
+        manager.load(tempDir.toFile());
+        try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
+            bukkit.when(Bukkit::getWorlds).thenReturn(List.of(world));
+            assertSame(world, manager.getReferenceWorld());
+        }
+        manager.close();
+
+        assertTrue(manager.isPersisted());
+    }
+
+    @Test
+    void inactiveCorruptEventRestoresPendingWeatherWhenItsWorldLoads() throws Exception {
+        YamlConfiguration data = persistedEventData();
+        data.set("bloodmoon.world-id", "not-a-uuid");
+        data.save(tempDir.resolve("BloodMoonData.yml").toFile());
+        when(atmosphere.isCurrentStateFormat()).thenReturn(true);
+        when(atmosphere.snapshotWorldId()).thenReturn(OTHER_WORLD_ID);
+        when(atmosphere.requiresWeatherRestore()).thenReturn(true);
+
+        BloodMoonManager manager = new BloodMoonManager(plugin, atmosphere);
+        manager.load(tempDir.toFile());
+        World snapshotWorld = mock(World.class);
+        try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
+            bukkit.when(() -> Bukkit.getWorld(OTHER_WORLD_ID)).thenReturn(snapshotWorld);
+            manager.recoverPendingAtmosphere();
+        }
+        manager.close();
+
+        verify(atmosphere).recoverPendingWeather(snapshotWorld);
+    }
+
+    private static YamlConfiguration persistedEventData() {
+        YamlConfiguration data = new YamlConfiguration();
+        data.set("bloodmoon.persisted", true);
+        data.set("bloodmoon.persisted-day", 4L);
+        data.set("bloodmoon.world-id", WORLD_ID.toString());
+        return data;
     }
 
     private BloodMoonManager loadedManager() {

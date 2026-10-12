@@ -40,10 +40,11 @@ Test these one by one. If something breaks, send the test number and the matchin
 
 ## Test 5: Weather restoration
 
-1. Before a new test, set the survival world's weather to clear.
-2. Force a Blood Moon, then run `/xa stopbloodmoon`.
+1. Before a new test, set the survival world to clear weather and note the weather timer.
+2. Force a Blood Moon, then run `/xa stopbloodmoon` and confirm clear weather returns.
+3. Repeat after starting with rain or thunder and a different timer.
 
-**Pass:** the exact weather from before the event returns instead of staying stormy.
+**Pass:** the exact storm, thunder, and timer values from before each event return.
 
 ## Test 6: Restart resume
 

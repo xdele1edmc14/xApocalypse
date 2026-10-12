@@ -31,6 +31,7 @@ import static org.mockito.Mockito.when;
 class BloodMoonAtmosphereManagerTest {
 
     private static final UUID WORLD_ID = UUID.fromString("11111111-2222-3333-4444-555555555555");
+    private static final UUID OTHER_WORLD_ID = UUID.fromString("66666666-7777-8888-9999-aaaaaaaaaaaa");
 
     private xApocalypse plugin;
     private World world;
@@ -246,6 +247,121 @@ class BloodMoonAtmosphereManagerTest {
 
         assertTrue(storm.get());
         assertTrue(thunder.get());
+    }
+
+    @Test
+    void disabledAtmosphereDoesNotRewriteWeatherWhenTheEventEnds() {
+        manager.loadConfig(config(false, true, true));
+        manager.start(world);
+        org.mockito.Mockito.clearInvocations(world);
+
+        storm.set(true);
+        thunder.set(true);
+        weatherDuration.set(900);
+        thunderDuration.set(800);
+        manager.end();
+
+        verify(world, never()).setStorm(org.mockito.ArgumentMatchers.anyBoolean());
+        verify(world, never()).setThundering(org.mockito.ArgumentMatchers.anyBoolean());
+        verify(world, never()).setWeatherDuration(org.mockito.ArgumentMatchers.anyInt());
+        verify(world, never()).setThunderDuration(org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    void disabledWeatherDoesNotRewriteWeatherWhenTheEventEnds() {
+        YamlConfiguration disabled = config(true, true, true);
+        disabled.set("bloodmoon.atmosphere.weather.enabled", false);
+        manager.loadConfig(disabled);
+        manager.start(world);
+        org.mockito.Mockito.clearInvocations(world);
+
+        storm.set(true);
+        thunder.set(true);
+        weatherDuration.set(900);
+        thunderDuration.set(800);
+        manager.end();
+
+        verify(world, never()).setStorm(org.mockito.ArgumentMatchers.anyBoolean());
+        verify(world, never()).setThundering(org.mockito.ArgumentMatchers.anyBoolean());
+        verify(world, never()).setWeatherDuration(org.mockito.ArgumentMatchers.anyInt());
+        verify(world, never()).setThunderDuration(org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    void stormToggleDoesNotOwnOrRestoreTheStormState() {
+        manager.loadConfig(config(true, false, true));
+        manager.start(world);
+        org.mockito.Mockito.clearInvocations(world);
+
+        storm.set(true);
+        weatherDuration.set(900);
+        manager.end();
+
+        verify(world, never()).setStorm(org.mockito.ArgumentMatchers.anyBoolean());
+        verify(world, never()).setWeatherDuration(org.mockito.ArgumentMatchers.anyInt());
+        verify(world).setThundering(false);
+        verify(world).setThunderDuration(1200);
+    }
+
+    @Test
+    void firstHeartbeatAfterLateWorldLoadSchedulesAtmosphereSounds() {
+        YamlConfiguration data = new YamlConfiguration();
+        data.set("bloodmoon.atmosphere.snapshot.world-id", WORLD_ID.toString());
+        data.set("bloodmoon.atmosphere.snapshot.storm", false);
+        data.set("bloodmoon.atmosphere.snapshot.thunder", false);
+        data.set("bloodmoon.atmosphere.snapshot.weather-duration", 2400);
+        data.set("bloodmoon.atmosphere.snapshot.thunder-duration", 1200);
+        manager.loadState(data);
+        manager.loadConfig(config(true, true, true));
+
+        manager.heartbeat(world);
+
+        assertEquals(60_000L, manager.nextSoundAtMillis());
+    }
+
+    @Test
+    void resumeRejectsAWorldThatDoesNotMatchTheSavedSnapshot() {
+        YamlConfiguration data = persistedSnapshot(true, true);
+        World otherWorld = mock(World.class);
+        when(otherWorld.getUID()).thenReturn(OTHER_WORLD_ID);
+        manager.loadState(data);
+        manager.loadConfig(config(true, true, true));
+
+        manager.resume(otherWorld);
+
+        assertTrue(manager.hasSnapshotFor(WORLD_ID));
+        assertFalse(manager.hasSnapshotFor(OTHER_WORLD_ID));
+        verify(otherWorld, never()).setStorm(org.mockito.ArgumentMatchers.anyBoolean());
+        verify(otherWorld, never()).setThundering(org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    @Test
+    void pendingWeatherIsKeptUntilItsWorldReturns() {
+        manager.loadState(persistedSnapshot(true, true));
+        manager.loadConfig(config(true, true, true));
+
+        manager.end();
+
+        assertTrue(manager.hasSnapshotFor(WORLD_ID));
+        manager.recoverPendingWeather(world);
+        assertFalse(manager.hasSnapshotFor(WORLD_ID));
+        verify(world).setStorm(false);
+        verify(world).setThundering(false);
+        verify(world).setWeatherDuration(2400);
+        verify(world).setThunderDuration(1200);
+    }
+
+    private static YamlConfiguration persistedSnapshot(boolean stormApplied, boolean thunderApplied) {
+        YamlConfiguration data = new YamlConfiguration();
+        data.set("bloodmoon.atmosphere.state-version", 1);
+        data.set("bloodmoon.atmosphere.snapshot.world-id", WORLD_ID.toString());
+        data.set("bloodmoon.atmosphere.snapshot.storm", false);
+        data.set("bloodmoon.atmosphere.snapshot.thunder", false);
+        data.set("bloodmoon.atmosphere.snapshot.weather-duration", 2400);
+        data.set("bloodmoon.atmosphere.snapshot.thunder-duration", 1200);
+        data.set("bloodmoon.atmosphere.snapshot.storm-applied", stormApplied);
+        data.set("bloodmoon.atmosphere.snapshot.thunder-applied", thunderApplied);
+        return data;
     }
 
     private static YamlConfiguration config(boolean atmosphere, boolean storm, boolean thunder) {

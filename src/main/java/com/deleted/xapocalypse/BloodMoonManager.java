@@ -191,17 +191,40 @@ public class BloodMoonManager {
         forcedBloodMoonStartTime = bloodMoonDataConfig.getLong("bloodmoon.forced-start-time", -1);
         forcedBloodMoonDuration = bloodMoonDataConfig.getLong("bloodmoon.forced-duration-minutes", -1);
         String worldId = bloodMoonDataConfig.getString("bloodmoon.world-id");
+        boolean invalidActiveWorldState = false;
         if (worldId != null) {
             try {
                 bloodMoonWorldId = UUID.fromString(worldId);
             } catch (IllegalArgumentException e) {
-                plugin.getLogger().warning("Invalid bloodmoon.world-id in BloodMoonData.yml; using the first enabled world.");
+                plugin.getLogger().warning("Invalid bloodmoon.world-id in BloodMoonData.yml; clearing the active event safely.");
                 bloodMoonWorldId = null;
+                invalidActiveWorldState = bloodMoonPersisted || forcedBloodMoon;
             }
+        } else if (bloodMoonPersisted || forcedBloodMoon) {
+            UUID snapshotWorldId = atmosphere.snapshotWorldId();
+            if (atmosphere.isCurrentStateFormat()) {
+                plugin.getLogger().warning("Active Blood Moon has no world UUID; clearing the event safely.");
+                invalidActiveWorldState = true;
+            } else if (snapshotWorldId != null) {
+                // Development builds before the state marker can still recover the exact world.
+                bloodMoonWorldId = snapshotWorldId;
+            }
+        }
+
+        UUID snapshotWorldId = atmosphere.snapshotWorldId();
+        if ((bloodMoonPersisted || forcedBloodMoon) && bloodMoonWorldId != null
+                && snapshotWorldId != null && !bloodMoonWorldId.equals(snapshotWorldId)) {
+            plugin.getLogger().warning("Blood Moon world and weather snapshot do not match; clearing the event safely.");
+            invalidActiveWorldState = true;
         }
         // Warning dedupe: restore the last day a pre-blood-moon warning broadcast on so a
         // same-day restart doesn't fire the warning twice.
         lastWarnedDay = bloodMoonDataConfig.getLong("bloodmoon.last-warned-day", -1);
+
+        if (invalidActiveWorldState) {
+            clearPersistedEventState();
+            save();
+        }
 
         if (bloodMoonPersisted) {
             plugin.getLogger().info("Loaded persisted blood moon from BloodMoonData.yml - day " + persistedBloodMoonDay);
@@ -395,6 +418,29 @@ public class BloodMoonManager {
         return resetPhantomTimer;
     }
 
+    void recoverPendingAtmosphere() {
+        if (bloodMoonPersisted || forcedBloodMoon) return;
+        UUID snapshotWorldId = atmosphere.snapshotWorldId();
+        if (snapshotWorldId == null) return;
+        if (!atmosphere.requiresWeatherRestore()) {
+            atmosphere.discardPendingState();
+            return;
+        }
+        World snapshotWorld = Bukkit.getWorld(snapshotWorldId);
+        if (snapshotWorld != null) {
+            atmosphere.recoverPendingWeather(snapshotWorld);
+        }
+    }
+
+    private void clearPersistedEventState() {
+        bloodMoonPersisted = false;
+        persistedBloodMoonDay = -1;
+        forcedBloodMoon = false;
+        forcedBloodMoonStartTime = -1;
+        forcedBloodMoonDuration = -1;
+        bloodMoonWorldId = null;
+    }
+
     // === REPEATING TASK ===
 
     public void startTask() {
@@ -408,6 +454,7 @@ public class BloodMoonManager {
         new BukkitRunnable() {
             @Override
             public void run() {
+                recoverPendingAtmosphere();
                 cachedDaysUntilNextBloodMoon = getDaysUntilNextBloodMoon();
                 if (Bukkit.getWorlds().isEmpty()) return;
                 if (!bloodMoonEnabled) {
