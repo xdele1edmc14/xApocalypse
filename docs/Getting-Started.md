@@ -21,7 +21,7 @@ This page covers everything you need to get xApocalypse running on your server.
 
 ## Installation
 
-1. Download or build `xApocalypse-1.6.5.jar` (see [Building from Source](#building-from-source)).
+1. Download or build `xApocalypse-1.7.0.jar` (see [Building from Source](#building-from-source)).
 2. Place the jar in your server's `plugins/` directory.
 3. **Start the server once.** This generates the default configuration files.
 4. Stop the server, edit the configs to taste (see the [Configuration Reference](Configuration-Reference.md)), and start again.
@@ -52,7 +52,8 @@ After installing, confirm the basics:
 2. **Stand in an enabled world in Survival mode.** Hordes only spawn for **survival-mode** players in **enabled** (non-lobby) worlds. Creative/Spectator players and anyone flying or gliding are skipped.
 3. **Wait for a spawn cycle.** The spawner runs every `apocalypse-settings.spawn-rate` ticks (default **1500** = 75 seconds). At night you'll see zombies rise from the ground around you.
 4. **Try a manual spawn.** As an OP, run `/xa spawn horde 10` to spawn a mixed horde immediately.
-5. **Force a Blood Moon** to preview the event: `/xa fbm 5` (5 minutes).
+5. **Force a Blood Moon** to preview the event: `/xa fbm 5` (5 minutes). The active world should turn stormy while lobby and unrelated worlds stay untouched.
+6. **Try a bed.** Sleep should be blocked until the Blood Moon ends, and the default phantom protection still counts the attempt as rest.
 
 > **Not seeing spawns?** Enable `debug-mode: true` in `config.yml`, reload, and watch the console — the spawner logs exactly why each player is or isn't eligible. See [FAQ & Troubleshooting](FAQ-and-Troubleshooting.md).
 
@@ -66,7 +67,7 @@ The project uses Maven:
 mvn clean package
 ```
 
-The compiled jar is written to `target/xApocalypse-1.6.5.jar`.
+The compiled jar is written to `target/xApocalypse-1.7.0.jar`.
 
 ---
 

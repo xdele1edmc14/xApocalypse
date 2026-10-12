@@ -29,6 +29,25 @@ During a Blood Moon, every newly spawned zombie has its base stats multiplied, a
 
 Additionally, if **MythicMobs** is installed, the Blood Moon spawns a guaranteed [Mutant boss](MythicMobs-Integration.md) and starts a periodic Mutant spawn loop for the duration of the event.
 
+## Atmosphere
+
+The active Blood Moon world gets its own lightweight atmosphere:
+
+- Configurable storm and thunder.
+- A random configured vanilla sound every 60–120 seconds by default.
+- No weather or atmosphere sounds in lobby or unrelated worlds.
+- No extra per-player repeating tasks.
+
+xApocalypse saves the world's storm, thunder, and weather timers before changing them. When the Blood Moon ends, it restores those exact values if `bloodmoon.atmosphere.weather.restore-previous-weather` is enabled.
+
+Atmosphere can be disabled as a whole or split between weather and sounds under `bloodmoon.atmosphere` in `config.yml`.
+
+## Sleep and Phantoms
+
+Beds cannot be used in the active Blood Moon world while `bloodmoon.sleep.blocked` is enabled. Players in lobby and unrelated worlds can still sleep normally.
+
+With `bloodmoon.sleep.reset-phantom-timer: true`, each blocked bed attempt resets that player's rest statistic. This keeps sleep disabled without causing extra phantom punishment.
+
 ---
 
 ## The Boss Bar
@@ -59,8 +78,9 @@ A **forced** Blood Moon is timed by the **real-world clock** — its duration is
 
 Blood Moon state is saved to **`BloodMoonData.yml`** in the plugin folder. This means:
 
-- A server restart **mid-Blood-Moon** resumes the event correctly (including the MythicMobs spawn loop) rather than dropping it or letting it restart from scratch.
+- A server restart **mid-Blood-Moon** resumes the event and its atmosphere correctly (including the MythicMobs spawn loop) rather than dropping it or replaying the opening sound.
 - A forced Blood Moon's original start time and duration are persisted, so you **can't extend a forced Blood Moon by restarting** before it expires.
+- The original weather snapshot is kept across restarts, then restored when the event ends.
 - Setting the world to day with `/time set day` while a Blood Moon is active will correctly **end** it (and stop the Mutant loop).
 
 > You should never need to edit `BloodMoonData.yml` by hand — it's managed entirely by the plugin.

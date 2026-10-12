@@ -2,6 +2,18 @@
 
 All notable changes to xApocalypse are documented here.
 
+## [1.7.0] - 2026-11-06
+
+### Added
+
+- Blood Moons now bring configurable storms, thunder, and periodic vanilla horror sounds.
+- Sleeping is blocked in the active Blood Moon world, with an optional phantom-timer reset.
+
+### Fixed
+
+- Blood Moon atmosphere resumes safely after restarts and restores the world's previous weather.
+- Lobby and unrelated worlds remain unaffected by Blood Moon weather, sounds, and sleep blocking.
+
 ## [1.6.5] - 2026-10-09
 
 ### Fixed

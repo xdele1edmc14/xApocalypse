@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/badge/Java-25-orange?style=for-the-badge&logo=openjdk"/>
   <img src="https://img.shields.io/badge/Paper-26.2-red?style=for-the-badge&logo=spigotmc"/>
   <img src="https://img.shields.io/badge/License-GPLv3-yellow?style=for-the-badge"/>
-  <img src="https://img.shields.io/badge/Version-1.6.5-brightgreen?style=for-the-badge"/>
+  <img src="https://img.shields.io/badge/Version-1.7.0-brightgreen?style=for-the-badge"/>
 </p>
 
 <p align="center">
@@ -32,7 +32,7 @@
 
 * **🌑 Dynamic Horde Spawning** — Hordes spawn around players on a configurable timer, with surface-snapping (no suffocating in hills or void-dropping) and an optional ground-rise animation. → *[Wiki: Horde Spawning](docs/Horde-Spawning.md)*
 
-* **🩸 Blood Moon Events** — Every *X* in-game days the night turns hostile: zombie health, damage, speed, and horde size are all multiplied, with a server-wide boss bar countdown. Can be triggered or stopped manually. → *[Wiki: Blood Moon](docs/Blood-Moon.md)*
+* **🩸 Blood Moon Events** — Every *X* in-game days the night turns hostile: zombies grow stronger, storms roll in, unsettling sounds play, and sleep is blocked in the active world. Weather is restored when the event ends. → *[Wiki: Blood Moon](docs/Blood-Moon.md)*
 
 * **👃 Scent Tracking** — Player activity (sprinting, killing) builds a *scent* that attracts larger hordes. Scent decays over time, so staying quiet keeps you safer. → *[Wiki: Scent System](docs/Scent-System.md)*
 
@@ -171,6 +171,21 @@ bloodmoon:
     damage: 1.3
     speed: 1.1
     horde-size: 1.5
+  atmosphere:
+    enabled: true
+    weather:
+      enabled: true
+      storm: true
+      thunder: true
+      restore-previous-weather: true
+    sounds:
+      enabled: true
+      min-interval-seconds: 60
+      max-interval-seconds: 120
+      names: [AMBIENT_CAVE, ENTITY_WITHER_AMBIENT, ENTITY_WARDEN_HEARTBEAT]
+  sleep:
+    blocked: true
+    reset-phantom-timer: true
   force-duration-minutes: 10
   start-sound:
     enabled: true
@@ -208,7 +223,7 @@ mythicmobs:
 * **Java:** **25+**
 * **Soft dependencies (optional):** [GriefPrevention](https://www.spigotmc.org/resources/griefprevention.1884/), [MythicMobs](https://www.spigotmc.org/resources/mythicmobs.5702/), [PlaceholderAPI](https://www.spigotmc.org/resources/placeholderapi.6245/)
 
-1. Drop `xApocalypse-1.6.5.jar` into your server's `plugins/` folder.
+1. Drop `xApocalypse-1.7.0.jar` into your server's `plugins/` folder.
 2. Start the server once to generate `config.yml` and `messages.yml`.
 3. Edit the configs to taste and run `/xa reload`.
 

@@ -10,6 +10,19 @@ This guide covers testing all the major fixes and improvements made to the xApoc
 - Test world with various terrain types
 - Debug mode enabled in config.yml for better logging
 
+## 1.7.0 Blood Moon Quick Check
+
+1. Run `/xa forcebloodmoon 5` in an enabled survival world.
+2. Confirm that world gets a storm and thunder. A lobby or unrelated world must stay unchanged.
+3. Wait up to two minutes and confirm the configured vanilla atmosphere sounds play only in the active world.
+4. Try to enter a bed. The attempt should be blocked with the configured message.
+5. With `bloodmoon.sleep.reset-phantom-timer: true`, confirm the attempt resets the player's phantom timer.
+6. Stop and restart the server during the event. The Blood Moon and its atmosphere should resume without replaying the opening sound.
+7. Run `/xa stopbloodmoon`. The exact weather from before the event should return.
+8. Run `/xa reload` during another Blood Moon and confirm the atmosphere remains stable.
+
+These checks apply to both forced and natural Blood Moons.
+
 ## 1. Directional Spawning (Rear 160-degree Arc) Test
 
 ### Objective

@@ -234,6 +234,26 @@ bloodmoon:
     damage: 1.3
     speed: 1.1
     horde-size: 1.5
+  atmosphere:
+    enabled: true             # master switch for Blood Moon weather and cues
+    weather:
+      enabled: true
+      storm: true
+      thunder: true
+      restore-previous-weather: true
+    sounds:
+      enabled: true
+      min-interval-seconds: 60
+      max-interval-seconds: 120
+      volume: 0.8
+      pitch: 0.7
+      names:                  # valid vanilla Bukkit Sound names
+        - AMBIENT_CAVE
+        - ENTITY_WITHER_AMBIENT
+        - ENTITY_WARDEN_HEARTBEAT
+  sleep:
+    blocked: true             # only in the active Blood Moon world
+    reset-phantom-timer: true # blocked attempts still count as rest
   force-duration-minutes: 10   # default duration for /xa forcebloodmoon
   start-sound:
     enabled: true
