@@ -263,7 +263,7 @@ final class BloodMoonAtmosphereManager {
         Location location = player.getLocation().clone();
         Vector behind = location.getDirection().setY(0.0);
         if (behind.lengthSquared() < 0.0001) {
-            behind.setZ(-1.0);
+            behind.setZ(-3.0);
         } else {
             behind.normalize().multiply(-3.0);
         }

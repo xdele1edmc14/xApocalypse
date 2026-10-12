@@ -31,7 +31,7 @@ Bed entry is cancelled only when all of these are true:
 - The player is in the active Blood Moon world.
 - Sleep blocking is enabled.
 
-The player receives the configured sleep-blocked message. When the separate phantom-reset setting is enabled, the attempt also resets `timeSinceRest` to zero so blocking sleep does not punish the player with phantom spawns.
+The player receives the configured sleep-blocked message. When the separate phantom-reset setting is enabled, the attempt also resets `Statistic.TIME_SINCE_REST` to zero so blocking sleep does not punish the player with phantom spawns.
 
 ## Configuration
 
@@ -96,7 +96,7 @@ On plugin shutdown, the atmosphere manager restores the live world's weather wit
 
 ### `xApocalypseListener`
 
-`PlayerBedEnterEvent` remains in the existing listener. The handler asks `BloodMoonManager` whether the event is active in the player's exact world, cancels the attempt, sends the configured message, and optionally calls `setTimeSinceRest(0)`.
+`PlayerBedEnterEvent` remains in the existing listener. The handler asks `BloodMoonManager` whether the event is active in the player's exact world, cancels the attempt, sends the configured message, and optionally resets `Statistic.TIME_SINCE_REST`.
 
 ## Persistence and Restart Flow
 

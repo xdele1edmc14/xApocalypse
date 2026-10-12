@@ -1,5 +1,6 @@
 package com.deleted.xapocalypse;
 
+import org.bukkit.Statistic;
 import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -127,6 +128,18 @@ public class xApocalypseListener implements Listener {
     }
 
     // === PLAYER LIFECYCLE EVENTS ===
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onPlayerBedEnter(PlayerBedEnterEvent event) {
+        Player player = event.getPlayer();
+        if (!bloodMoon.shouldBlockSleep(player.getWorld())) return;
+
+        event.setCancelled(true);
+        player.sendMessage(plugin.getMessages().get("bloodmoon.sleep-blocked"));
+        if (bloodMoon.shouldResetPhantomTimer()) {
+            player.setStatistic(Statistic.TIME_SINCE_REST, 0);
+        }
+    }
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {

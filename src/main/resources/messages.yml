@@ -36,6 +36,7 @@ bloodmoon:
   force-start: "<gradient:dark_red:red><bold>Blood Moon has been FORCE STARTED!</bold></gradient>"
   force-time-set: "&7(Time set to night to begin event immediately)"
   natural-start: "&4&lBLOOD MOON RISES! &cPrepare for battle!"
+  sleep-blocked: "&4The Blood Moon will not let you rest."
   # Countdown warnings (broadcast at dawn on each of the last 'days-before' days — see config.yml).
   # Add/edit a numbered list per remaining-day count; 'generic' ({0} = days left) is used when no
   # exact match exists (e.g. days-before > 3).

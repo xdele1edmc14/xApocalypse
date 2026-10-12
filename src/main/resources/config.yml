@@ -228,6 +228,26 @@ bloodmoon:
     damage: 1.3
     speed: 1.1
     horde-size: 1.5
+  atmosphere:
+    enabled: true
+    weather:
+      enabled: true
+      storm: true
+      thunder: true
+      restore-previous-weather: true
+    sounds:
+      enabled: true
+      min-interval-seconds: 60
+      max-interval-seconds: 120
+      volume: 0.8
+      pitch: 0.7
+      names:
+        - AMBIENT_CAVE
+        - ENTITY_WITHER_AMBIENT
+        - ENTITY_WARDEN_HEARTBEAT
+  sleep:
+    blocked: true
+    reset-phantom-timer: true  # Bed attempts still count as resting for phantom prevention
   # CRITICAL FIX: Add force blood moon configuration
   force-duration-minutes: 10  # Duration for /xa forcebloodmoon command
   # Sound played to online players in enabled and lobby worlds when a Blood Moon begins.

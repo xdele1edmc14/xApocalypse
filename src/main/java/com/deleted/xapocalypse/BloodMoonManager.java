@@ -62,6 +62,8 @@ public class BloodMoonManager {
     private Sound startSound;
     private float startSoundVolume;
     private float startSoundPitch;
+    private boolean sleepBlocked;
+    private boolean resetPhantomTimer;
 
     // --- RUNTIME STATE ---
     private boolean forcedBloodMoon = false;
@@ -173,6 +175,8 @@ public class BloodMoonManager {
         startSound = startSoundEnabled ? parseSound(cfg.getString(
                 "bloodmoon.start-sound.name", "ENTITY_WITHER_SPAWN"),
                 "bloodmoon.start-sound.name") : null;
+        sleepBlocked = cfg.getBoolean("bloodmoon.sleep.blocked", true);
+        resetPhantomTimer = cfg.getBoolean("bloodmoon.sleep.reset-phantom-timer", true);
         atmosphere.loadConfig(cfg);
 
         // CRITICAL FIX: Load blood moon persistence data from separate file (dual-read preserved
@@ -393,6 +397,18 @@ public class BloodMoonManager {
 
     public void suspendAtmosphere() {
         atmosphere.suspend();
+    }
+
+    public boolean shouldBlockSleep(World world) {
+        if (!sleepBlocked || world == null) return false;
+        World referenceWorld = getReferenceWorld();
+        return referenceWorld != null
+                && referenceWorld.getUID().equals(world.getUID())
+                && isActive(referenceWorld);
+    }
+
+    public boolean shouldResetPhantomTimer() {
+        return resetPhantomTimer;
     }
 
     // === REPEATING TASK ===
