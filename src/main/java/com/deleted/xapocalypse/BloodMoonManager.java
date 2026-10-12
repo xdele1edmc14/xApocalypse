@@ -31,6 +31,7 @@ import java.util.UUID;
 public class BloodMoonManager {
 
     private final xApocalypse plugin;
+    private final BloodMoonAtmosphereManager atmosphere;
 
     // --- CONFIG VALUES ---
     private boolean bloodMoonEnabled;
@@ -86,6 +87,12 @@ public class BloodMoonManager {
 
     public BloodMoonManager(xApocalypse plugin) {
         this.plugin = plugin;
+        this.atmosphere = new BloodMoonAtmosphereManager(plugin, this::save);
+    }
+
+    BloodMoonManager(xApocalypse plugin, BloodMoonAtmosphereManager atmosphere) {
+        this.plugin = plugin;
+        this.atmosphere = atmosphere;
     }
 
     // === SETUP / PERSISTENCE ===
@@ -106,6 +113,7 @@ public class BloodMoonManager {
         bloodMoonDataWriter = new AtomicYamlWriter(bloodMoonDataFile.toPath(), exception ->
                 plugin.getLogger().severe("Could not save BloodMoonData.yml: " + exception.getMessage()));
 
+        atmosphere.loadState(bloodMoonDataConfig);
         // CRITICAL FIX: Load blood moon persistence data BEFORE config values
         loadBloodMoonData();
     }
@@ -165,6 +173,7 @@ public class BloodMoonManager {
         startSound = startSoundEnabled ? parseSound(cfg.getString(
                 "bloodmoon.start-sound.name", "ENTITY_WITHER_SPAWN"),
                 "bloodmoon.start-sound.name") : null;
+        atmosphere.loadConfig(cfg);
 
         // CRITICAL FIX: Load blood moon persistence data from separate file (dual-read preserved
         // from the original loadConfigValues, which re-asserted these flags after reloadConfig()).
@@ -227,6 +236,7 @@ public class BloodMoonManager {
             bloodMoonDataConfig.set("bloodmoon.world-id",
                     bloodMoonWorldId == null ? null : bloodMoonWorldId.toString());
             bloodMoonDataConfig.set("bloodmoon.last-warned-day", lastWarnedDay);
+            atmosphere.writeState(bloodMoonDataConfig);
             bloodMoonDataWriter.write(bloodMoonDataConfig.saveToString());
 
             plugin.debugLog("Saved blood moon data to BloodMoonData.yml: active=" + bloodMoonPersisted + ", day=" + persistedBloodMoonDay + ", forced=" + forcedBloodMoon);
@@ -373,6 +383,18 @@ public class BloodMoonManager {
         return bloodMoonPersisted || forcedBloodMoon;
     }
 
+    public void resumeAtmosphereIfActive() {
+        if (!bloodMoonPersisted && !forcedBloodMoon) return;
+        World world = getReferenceWorld();
+        if (world != null && isActive(world)) {
+            atmosphere.resume(world);
+        }
+    }
+
+    public void suspendAtmosphere() {
+        atmosphere.suspend();
+    }
+
     // === REPEATING TASK ===
 
     public void startTask() {
@@ -461,26 +483,10 @@ public class BloodMoonManager {
                     // blood moons already ran onBloodMoonStart() from forceBloodMoon().
                     if (!bloodMoonPersisted && !forcedBloodMoon) {
                         long currentDay = mainWorld.getFullTime() / 24000L;
-                        bloodMoonPersisted = true;
-                        persistedBloodMoonDay = currentDay;
-                        bloodMoonWorldId = mainWorld.getUID();
-                        save();
-
-                        MythicMobsManager mm = plugin.getMythicMobsManager();
-                        if (mm != null) {
-                            mm.onBloodMoonStart();
-                        }
-
-                        plugin.getLogger().info("Natural blood moon started on day " + currentDay);
-                        plugin.debugLog("Blood moon persistence: active=" + bloodMoonPersisted + ", day=" + persistedBloodMoonDay);
-
-                        for (Player p : Bukkit.getOnlinePlayers()) {
-                            if (plugin.isWorldEnabled(p.getWorld()) || plugin.isLobbyWorld(p.getWorld())) {
-                                p.sendMessage(plugin.getMessages().get("bloodmoon.natural-start"));
-                            }
-                        }
-                        playStartSound();
+                        beginNaturalBloodMoon(mainWorld, currentDay);
                     }
+
+                    atmosphere.heartbeat(mainWorld);
 
                     long time = mainWorld.getTime();
 
@@ -625,7 +631,8 @@ public class BloodMoonManager {
      * spawn loop and — unless {@code bloodmoon.despawn-on-end} is disabled — removes the zombies and
      * Mutants the event spawned so they don't linger once it's over.
      */
-    private void signalBloodMoonEnd() {
+    void signalBloodMoonEnd() {
+        atmosphere.end();
         MythicMobsManager mm = plugin.getMythicMobsManager();
         if (mm != null) {
             mm.onBloodMoonEnd();
@@ -728,6 +735,30 @@ public class BloodMoonManager {
         }
     }
 
+    void beginNaturalBloodMoon(World world, long currentDay) {
+        bloodMoonPersisted = true;
+        persistedBloodMoonDay = currentDay;
+        bloodMoonWorldId = world.getUID();
+        atmosphere.start(world);
+        save();
+
+        MythicMobsManager mm = plugin.getMythicMobsManager();
+        if (mm != null) {
+            mm.onBloodMoonStart();
+        }
+
+        plugin.getLogger().info("Natural blood moon started on day " + currentDay);
+        plugin.debugLog("Blood moon persistence: active=" + bloodMoonPersisted
+                + ", day=" + persistedBloodMoonDay);
+
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (plugin.isWorldEnabled(player.getWorld()) || plugin.isLobbyWorld(player.getWorld())) {
+                player.sendMessage(plugin.getMessages().get("bloodmoon.natural-start"));
+            }
+        }
+        playStartSound();
+    }
+
     /**
      * Join replay: if today's dawn warning already broadcast (dayNumber == lastWarnedDay), replay
      * it to the joining player ~2s after join (past the join-message spam). Players joining before
@@ -769,6 +800,7 @@ public class BloodMoonManager {
         forcedBloodMoonDuration = duration; // CRITICAL FIX: Store actual duration
         bloodMoonWorldId = world.getUID();
 
+        atmosphere.start(world);
         // CRITICAL FIX: Save forced blood moon state
         save();
 

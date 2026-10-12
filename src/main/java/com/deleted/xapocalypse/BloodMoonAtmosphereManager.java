@@ -65,6 +65,9 @@ final class BloodMoonAtmosphereManager {
     }
 
     void loadConfig(FileConfiguration config) {
+        boolean wasForcingStorm = enabled && weatherEnabled && forceStorm;
+        boolean wasForcingThunder = enabled && weatherEnabled && forceThunder;
+
         enabled = config.getBoolean("bloodmoon.atmosphere.enabled", true);
         weatherEnabled = config.getBoolean("bloodmoon.atmosphere.weather.enabled", true);
         forceStorm = config.getBoolean("bloodmoon.atmosphere.weather.storm", true);
@@ -95,6 +98,20 @@ final class BloodMoonAtmosphereManager {
             }
         }
         resolvedSoundKeys = Collections.unmodifiableList(validSounds);
+
+        if (snapshot != null && activeWorld != null
+                && snapshot.worldId().equals(activeWorld.getUID())) {
+            boolean forcingStormNow = enabled && weatherEnabled && forceStorm;
+            boolean forcingThunderNow = enabled && weatherEnabled && forceThunder;
+            if (wasForcingStorm && !forcingStormNow) {
+                activeWorld.setStorm(snapshot.storm());
+                activeWorld.setWeatherDuration(snapshot.weatherDuration());
+            }
+            if (wasForcingThunder && !forcingThunderNow) {
+                activeWorld.setThundering(snapshot.thunder());
+                activeWorld.setThunderDuration(snapshot.thunderDuration());
+            }
+        }
     }
 
     void loadState(FileConfiguration data) {

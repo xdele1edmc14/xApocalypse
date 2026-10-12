@@ -136,6 +136,7 @@ public class xApocalypse extends JavaPlugin {
 
         startSpawnerTask();
         immunity.startCheckTask();
+        bloodMoon.resumeAtmosphereIfActive();
 
         // startSpawnerTask() begins by cancelling every plugin task, so Blood Moon integrations
         // must resume afterwards. Resume only the loop: a restart is not a new event and must not
@@ -182,6 +183,7 @@ public class xApocalypse extends JavaPlugin {
 
         // CRITICAL FIX: Save blood moon persistence data on shutdown using separate file
         if (bloodMoon != null) {
+            bloodMoon.suspendAtmosphere();
             bloodMoon.save();
         }
 
@@ -268,6 +270,7 @@ public class xApocalypse extends JavaPlugin {
         }
         startSpawnerTask();
         immunity.startCheckTask(); // CRITICAL FIX: Restart immunity check task on reload
+        bloodMoon.resumeAtmosphereIfActive();
         // Bug C2 fix: reload the watchdog AFTER startSpawnerTask() so its tasks
         // are not killed by the cancelTasks(this) call inside startSpawnerTask().
         if (performanceWatchdog != null) {

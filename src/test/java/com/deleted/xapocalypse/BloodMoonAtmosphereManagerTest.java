@@ -226,6 +226,28 @@ class BloodMoonAtmosphereManagerTest {
         assertTrue(reloaded.rareScareUsed());
     }
 
+    @Test
+    void disablingWeatherOnReloadRestoresWithoutDiscardingTheSnapshot() {
+        manager.loadConfig(config(true, true, true));
+        manager.start(world);
+        assertTrue(storm.get());
+        assertTrue(thunder.get());
+
+        YamlConfiguration disabled = config(true, true, true);
+        disabled.set("bloodmoon.atmosphere.weather.enabled", false);
+        manager.loadConfig(disabled);
+
+        assertFalse(storm.get());
+        assertFalse(thunder.get());
+        assertTrue(manager.hasSnapshotFor(WORLD_ID));
+
+        manager.loadConfig(config(true, true, true));
+        manager.resume(world);
+
+        assertTrue(storm.get());
+        assertTrue(thunder.get());
+    }
+
     private static YamlConfiguration config(boolean atmosphere, boolean storm, boolean thunder) {
         YamlConfiguration config = new YamlConfiguration();
         config.set("bloodmoon.atmosphere.enabled", atmosphere);
