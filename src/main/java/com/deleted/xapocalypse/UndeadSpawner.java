@@ -71,8 +71,7 @@ public final class UndeadSpawner {
         activeOrRecentByBlockMs.put(blockKey, now);
 
         Location spawnLoc = surface.clone().add(0.0, -START_BELOW_SURFACE_Y, 0.0);
-        // Bug 20 fix: set the plugin-spawning flag so onEntitySpawn skips the mob-list check
-        // and does not call assignZombieType again (we call it ourselves below).
+        // The spawn listener must not roll a second zombie type.
         Zombie zombie;
         plugin.setPluginSpawning(true);
         try {
@@ -102,7 +101,7 @@ public final class UndeadSpawner {
         zombie.setAI(false);
         zombie.setGravity(false);
         zombie.setInvulnerable(true);
-        // Bug 19 fix: mark as animating so the LOD system's setAI(false) doesn't fight the animation
+        // Keep LOD changes away until the rise finishes.
         zombie.getPersistentDataContainer().set(xApocalypseUtils.ANIMATING_KEY,
                 org.bukkit.persistence.PersistentDataType.BYTE, (byte) 1);
 
@@ -166,25 +165,14 @@ public final class UndeadSpawner {
 
     private void finalizeZombie(Zombie zombie) {
         if (!zombie.isValid() || zombie.isDead()) return;
-        // Bug 19 fix: remove the animating tag before re-enabling AI so the LOD system takes over normally
+        // Remove the rise marker before the LOD system takes over.
         zombie.getPersistentDataContainer().remove(xApocalypseUtils.ANIMATING_KEY);
         zombie.setInvulnerable(false);
         zombie.setGravity(true);
         zombie.setAI(true);
     }
 
-    /**
-     * Bug C2 fix: finalize every zombie left mid rise-animation. The animation timers are plugin
-     * tasks, so a {@code /xa reload} or server shutdown calls {@code cancelTasks(this)} and kills
-     * them WITHOUT running {@link #finalizeZombie}, which strands the zombie permanently
-     * invulnerable, AI-off, gravity-off and still tagged {@code ANIMATING_KEY} — and the LOD system
-     * then refuses to re-enable its AI, so it survives restarts as a frozen, unkillable mob.
-     *
-     * Sweeping every world for the animating tag (rather than only the in-memory tracker) also
-     * recovers orphans left by a previous crash. Then the concurrency trackers are cleared so a
-     * future reload can't leak toward {@code MAX_CONCURRENT_ANIMATIONS} and disable rises entirely.
-     * Safe to call repeatedly.
-     */
+    /** Restores every mid-rise zombie before animation tasks are cancelled. */
     public void finalizeAllAnimations() {
         for (World world : Bukkit.getWorlds()) {
             for (Zombie zombie : world.getEntitiesByClass(Zombie.class)) {

@@ -15,9 +15,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * Owns the Scent subsystem: per-player scent accumulation, the decay + continuous-sprint
  * tasks, and scent accrual from sprinting, jumping and kills. Scent raises the size of the
  * hordes spawned near a player (consumed by {@link HordeManager#spawnZombiesNearPlayer}).
- *
- * Extracted verbatim from the original xApocalypse monolith (Bug C4 jump-edge detection
- * preserved).
  */
 public class ScentManager {
 
@@ -25,14 +22,12 @@ public class ScentManager {
 
     private final Map<UUID, Double> playerScent = new ConcurrentHashMap<>();
     private final Map<UUID, Long> lastJumpTime = new HashMap<>();
-    // Bug C4 fix: previous-tick ground state so onMove can detect the on-ground -> airborne jump edge
+    // Previous ground state marks the exact takeoff tick.
     private final Map<UUID, Boolean> playerWasOnGround = new HashMap<>();
     private BukkitTask scentDecayTask;
     private BukkitTask scentSprintTask;
 
-    // Minor fix: cache hot-path config so onMove (fires on EVERY PlayerMoveEvent, including
-    // look-only moves) and addScent don't re-read config each call. Refreshed in startTasks()
-    // on enable and on every /xa reload.
+    // Cached because PlayerMoveEvent also fires for look-only movement.
     private boolean scentEnabled = true;
     private double maxScent = 100.0;
 
@@ -110,11 +105,7 @@ public class ScentManager {
             return;
         }
 
-        // Jump detection: a jump is the transition from on-ground (last tick) to airborne
-        // (this tick) with upward velocity. Bug C4 fix: the old guard `if (!player.isOnGround())
-        // return;` fired for the entire airborne portion of every jump, so the velocity check
-        // below was never reached and jumps produced zero scent. Track the previous-tick ground
-        // state to detect the take-off edge instead.
+        // Count the grounded-to-airborne edge once per jump.
         boolean wasOnGround = playerWasOnGround.getOrDefault(uuid, true);
         boolean nowOnGround = player.isOnGround();
         playerWasOnGround.put(uuid, nowOnGround);

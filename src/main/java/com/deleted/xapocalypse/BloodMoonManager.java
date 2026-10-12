@@ -22,11 +22,7 @@ import java.util.UUID;
 /**
  * Owns the entire Blood Moon subsystem: configuration multipliers, the BloodMoonData.yml
  * persistence file, the bossbar, the repeating lifecycle task, and the force/stop commands.
- *
- * Extracted verbatim from the original xApocalypse monolith — every bug-fix (Bug C5/C6,
- * Fix RC1-RC4, Bug M5) is preserved. The MythicMobs integration is resolved lazily through
- * the plugin facade ({@code plugin.getMythicMobsManager()}) so this manager holds no direct
- * reference to MythicMobsManager (keeps the dependency graph acyclic at the type level).
+ * MythicMobs is resolved through the plugin facade to avoid a direct dependency cycle.
  */
 public class BloodMoonManager {
 
@@ -37,7 +33,7 @@ public class BloodMoonManager {
     private boolean bloodMoonEnabled;
     private int bloodMoonInterval;
     private String bloodMoonTitle;
-    private int bloodMoonForceDuration; // CRITICAL FIX: force duration config
+    private int bloodMoonForceDuration;
 
     // --- MULTIPLIERS ---
     private double bmHealthMult;
@@ -67,11 +63,10 @@ public class BloodMoonManager {
 
     // --- RUNTIME STATE ---
     private boolean forcedBloodMoon = false;
-    private long forcedBloodMoonStartTime = -1; // CRITICAL FIX: Track forced blood moon start time
-    private long forcedBloodMoonDuration = -1; // CRITICAL FIX: Track actual forced duration
+    private long forcedBloodMoonStartTime = -1;
+    private long forcedBloodMoonDuration = -1;
     private BossBar bloodMoonBar;
 
-    // CRITICAL FIX: blood moon persistence fields
     private boolean bloodMoonPersisted = false;
     private long persistedBloodMoonDay = -1;
     private UUID bloodMoonWorldId = null;
@@ -82,7 +77,6 @@ public class BloodMoonManager {
     // Persisted in BloodMoonData.yml so a same-day restart doesn't re-broadcast.
     private long lastWarnedDay = -1;
 
-    // CRITICAL FIX: Separate blood moon data file
     private File bloodMoonDataFile;
     private FileConfiguration bloodMoonDataConfig;
     private AtomicYamlWriter bloodMoonDataWriter;
@@ -101,7 +95,6 @@ public class BloodMoonManager {
 
     /** Initializes BloodMoonData.yml and loads persisted state. Must NOT touch MessageManager. */
     public void load(File dataFolder) {
-        // CRITICAL FIX: Initialize separate blood moon data file
         bloodMoonDataFile = new File(dataFolder, "BloodMoonData.yml");
         if (!bloodMoonDataFile.exists()) {
             try {
@@ -116,7 +109,6 @@ public class BloodMoonManager {
                 plugin.getLogger().severe("Could not save BloodMoonData.yml: " + exception.getMessage()));
 
         atmosphere.loadState(bloodMoonDataConfig);
-        // CRITICAL FIX: Load blood moon persistence data BEFORE config values
         loadBloodMoonData();
     }
 
@@ -179,14 +171,12 @@ public class BloodMoonManager {
         resetPhantomTimer = cfg.getBoolean("bloodmoon.sleep.reset-phantom-timer", true);
         atmosphere.loadConfig(cfg);
 
-        // CRITICAL FIX: Load blood moon persistence data from separate file (dual-read preserved
-        // from the original loadConfigValues, which re-asserted these flags after reloadConfig()).
+        // Reload the event flags after /xa reload.
         bloodMoonPersisted = bloodMoonDataConfig.getBoolean("bloodmoon.persisted", false);
         persistedBloodMoonDay = bloodMoonDataConfig.getLong("bloodmoon.persisted-day", -1);
         forcedBloodMoon = bloodMoonDataConfig.getBoolean("bloodmoon.forced", false);
     }
 
-    // CRITICAL FIX: blood moon data loading method
     private void loadBloodMoonData() {
         if (bloodMoonDataConfig == null) {
             plugin.getLogger().warning("Cannot load blood moon data - bloodMoonDataConfig is null");
@@ -197,9 +187,7 @@ public class BloodMoonManager {
         bloodMoonPersisted = bloodMoonDataConfig.getBoolean("bloodmoon.persisted", false);
         persistedBloodMoonDay = bloodMoonDataConfig.getLong("bloodmoon.persisted-day", -1);
         forcedBloodMoon = bloodMoonDataConfig.getBoolean("bloodmoon.forced", false);
-        // Bug C6 fix: restore the forced blood moon's original anchor and duration so a restart
-        // mid-forced-blood-moon can't reset the timer (which let a forced blood moon be extended
-        // indefinitely by restarting before it expired).
+        // Keep forced events tied to their original real-time deadline.
         forcedBloodMoonStartTime = bloodMoonDataConfig.getLong("bloodmoon.forced-start-time", -1);
         forcedBloodMoonDuration = bloodMoonDataConfig.getLong("bloodmoon.forced-duration-minutes", -1);
         String worldId = bloodMoonDataConfig.getString("bloodmoon.world-id");
@@ -223,7 +211,6 @@ public class BloodMoonManager {
         }
     }
 
-    // CRITICAL FIX: blood moon data saving method
     public void save() {
         if (bloodMoonDataConfig == null || bloodMoonDataFile == null || bloodMoonDataWriter == null) {
             plugin.getLogger().warning("Cannot save blood moon data - blood moon data files not initialized");
@@ -234,7 +221,6 @@ public class BloodMoonManager {
             bloodMoonDataConfig.set("bloodmoon.persisted", bloodMoonPersisted);
             bloodMoonDataConfig.set("bloodmoon.persisted-day", persistedBloodMoonDay);
             bloodMoonDataConfig.set("bloodmoon.forced", forcedBloodMoon);
-            // Bug C6 fix: persist the forced blood moon anchor + duration alongside the flags.
             bloodMoonDataConfig.set("bloodmoon.forced-start-time", forcedBloodMoonStartTime);
             bloodMoonDataConfig.set("bloodmoon.forced-duration-minutes", forcedBloodMoonDuration);
             bloodMoonDataConfig.set("bloodmoon.world-id",
@@ -293,7 +279,6 @@ public class BloodMoonManager {
 
         boolean isDayOf = (dayNumber > 0) && (dayNumber % bloodMoonInterval == 0);
 
-        // CRITICAL FIX: Check for persisted blood moon state
         if (bloodMoonPersisted && persistedBloodMoonDay == dayNumber) {
             isDayOf = true;
         }
@@ -304,7 +289,6 @@ public class BloodMoonManager {
 
         boolean isNight = time >= 13000 && time <= 23000;
 
-        // CRITICAL FIX: For forced blood moon, use actual elapsed time
         if (forcedBloodMoon) {
             if (forcedBloodMoonStartTime == -1) {
                 return false;
@@ -414,9 +398,7 @@ public class BloodMoonManager {
     // === REPEATING TASK ===
 
     public void startTask() {
-        // Bug C5 fix: remove the previous bossbar from all players before replacing the
-        // reference. On /xa reload this method runs again; without this, each reload left an
-        // orphaned bar stuck in every player's HUD (visible and a memory leak) until restart.
+        // Remove the old bar before /xa reload replaces it.
         if (bloodMoonBar != null) {
             bloodMoonBar.removeAll();
         }
@@ -465,12 +447,7 @@ public class BloodMoonManager {
                 // Pre-blood-moon countdown warning (dawn broadcast, deduped per day).
                 checkWarning(mainWorld);
 
-                // Fix RC4: Detect real-time forced-blood-moon expiry HERE, before
-                // calling isBloodMoonActive().  When duration runs out during nighttime,
-                // isBloodMoonActive() returns false but the else-branch's daytime guard
-                // (time < 13000 || time > 23000) never fires (task keeps time at ~14000).
-                // Without this, forcedBloodMoon stays true as a zombie state and
-                // onBloodMoonEnd() is never signalled to the MM tick loop.
+                // Forced events expire by real time even while the world remains at night.
                 if (forcedBloodMoon && forcedBloodMoonStartTime != -1) {
                     long elapsedMs = System.currentTimeMillis() - forcedBloodMoonStartTime;
                     long actualDur = forcedBloodMoonDuration != -1 ? forcedBloodMoonDuration : bloodMoonForceDuration;
@@ -490,13 +467,7 @@ public class BloodMoonManager {
                 }
 
                 if (isActive(mainWorld)) {
-                    // Bug C1 fix: fire the natural blood-moon "start" exactly once. isActive() returns
-                    // true on the FIRST night tick of an interval day — before the old else-branch
-                    // start code could ever run — so that code was unreachable and natural blood
-                    // moons silently never broadcast, never persisted, and never triggered the
-                    // MythicMobs spawn loop. Detect the transition here instead: active, but not yet
-                    // persisted and not forced. Once persisted=true this won't fire again, and forced
-                    // blood moons already ran onBloodMoonStart() from forceBloodMoon().
+                    // Persist the first active tick so natural starts fire once.
                     if (!bloodMoonPersisted && !forcedBloodMoon) {
                         long currentDay = mainWorld.getFullTime() / 24000L;
                         beginNaturalBloodMoon(mainWorld, currentDay);
@@ -511,7 +482,6 @@ public class BloodMoonManager {
                         time = 14000;
                     }
 
-                    // CRITICAL FIX: Use actual command duration, not config default
                     long actualDuration = forcedBloodMoonDuration != -1 ? forcedBloodMoonDuration : bloodMoonForceDuration;
                     long durationTicks = forcedBloodMoon ? actualDuration * 60 * 20L : 10_000L;
                     long remaining = remainingBloodMoonTicks(
@@ -523,7 +493,6 @@ public class BloodMoonManager {
                     );
 
                     if (remaining > 0) {
-                        // CRITICAL FIX: Calculate progress for forced blood moon using real time
                         double progress;
                         if (forcedBloodMoon && forcedBloodMoonStartTime != -1) {
                             long elapsedMs = System.currentTimeMillis() - forcedBloodMoonStartTime;
@@ -534,7 +503,6 @@ public class BloodMoonManager {
                         }
                         bloodMoonBar.setProgress(Math.max(0.0, Math.min(1.0, progress)));
 
-                        // CRITICAL FIX: Calculate remaining time for forced blood moon using real time
                         long totalSeconds;
                         if (forcedBloodMoon && forcedBloodMoonStartTime != -1) {
                             long elapsedMs = System.currentTimeMillis() - forcedBloodMoonStartTime;
@@ -549,7 +517,6 @@ public class BloodMoonManager {
                         String timeStr = String.format("%02d:%02d", minutes, seconds);
 
                         bloodMoonBar.setTitle(org.bukkit.ChatColor.translateAlternateColorCodes('&', bloodMoonTitle.replace("%time%", timeStr)));
-                        // CRITICAL FIX: Proper bossbar lifecycle management
                         for (Player p : Bukkit.getOnlinePlayers()) {
                             if (plugin.isWorldEnabled(p.getWorld()) || plugin.isLobbyWorld(p.getWorld())) {
                                 if (!bloodMoonBar.getPlayers().contains(p)) {
@@ -566,10 +533,7 @@ public class BloodMoonManager {
                         if (!bloodMoonBar.getPlayers().isEmpty()) {
                             bloodMoonBar.removeAll();
                         }
-                        // Fix RC2: Gate on (bloodMoonPersisted || forcedBloodMoon).
-                        // /xa forcebloodmoon sets forcedBloodMoon=true but NOT bloodMoonPersisted=true,
-                        // so the old guard silently skipped onBloodMoonEnd() for every forced blood
-                        // moon, permanently orphaning the MM spawn tick loop.
+                        // Natural and forced events share the same cleanup path.
                         if (bloodMoonPersisted || forcedBloodMoon) {
                             bloodMoonPersisted = false;
                             persistedBloodMoonDay = -1;
@@ -583,13 +547,12 @@ public class BloodMoonManager {
                         }
                     }
                 } else {
-                    // CRITICAL FIX: Force bossbar cleanup when blood moon is not active or when it's day
                     if (!bloodMoonBar.getPlayers().isEmpty()) {
                         bloodMoonBar.removeAll();
                         plugin.debugLog("Force cleanup: blood moon not active or it's day, removing bossbar");
                     }
 
-                    // CRITICAL FIX: Reset persistence if it's day time (someone used /time set day)
+                    // A manual time change ends the persisted event.
                     long time = mainWorld.getTime();
                     if (time < 13000 || time > 23000) {
                         if (bloodMoonPersisted || forcedBloodMoon) {
@@ -601,18 +564,10 @@ public class BloodMoonManager {
                             bloodMoonWorldId = null;
                             save();
                             plugin.debugLog("Day time detected - blood moon persistence reset");
-                            // Fix RC3: Signal MM manager here too.  Previously onBloodMoonEnd()
-                            // was missing from this path, so the spawn tick loop was never told
-                            // to stop when a blood moon was wiped by a /time set day command.
                             signalBloodMoonEnd();
                         }
                     }
 
-                    // Bug C1 fix: natural blood-moon START is now handled in the isActive() branch
-                    // above. The block that used to live here was unreachable (isActive() returns
-                    // true on the first night tick of an interval day, so this else is never entered
-                    // during a natural blood moon). Only the day-time persistence cleanup above
-                    // remains in this branch.
                 }
             }
         }.runTaskTimer(plugin, 20L, 20L);
@@ -620,7 +575,6 @@ public class BloodMoonManager {
 
     // === BOSSBAR LIFECYCLE ===
 
-    // CRITICAL FIX: clean up bossbars for a specific player (called from onPlayerJoin)
     public void cleanupBossbarForPlayer(Player player) {
         // Remove from blood moon bossbar
         if (bloodMoonBar != null && bloodMoonBar.getPlayers().contains(player)) {
@@ -628,7 +582,6 @@ public class BloodMoonManager {
         }
     }
 
-    // CRITICAL FIX: Clean up blood moon bossbar when player quits
     public void onPlayerQuit(Player player) {
         if (bloodMoonBar != null && bloodMoonBar.getPlayers().contains(player)) {
             bloodMoonBar.removePlayer(player);
@@ -812,12 +765,11 @@ public class BloodMoonManager {
             return;
         }
         forcedBloodMoon = true;
-        forcedBloodMoonStartTime = System.currentTimeMillis(); // CRITICAL FIX: Track start time
-        forcedBloodMoonDuration = duration; // CRITICAL FIX: Store actual duration
+        forcedBloodMoonStartTime = System.currentTimeMillis();
+        forcedBloodMoonDuration = duration;
         bloodMoonWorldId = world.getUID();
 
         atmosphere.start(world);
-        // CRITICAL FIX: Save forced blood moon state
         save();
 
         playStartSound();
@@ -841,26 +793,23 @@ public class BloodMoonManager {
 
     /** /xa stopbloodmoon */
     public void stopBloodMoon(CommandSender sender) {
-        // CRITICAL FIX: Stop blood moon and clean up
         if (bloodMoonPersisted || forcedBloodMoon) {
             World world = getReferenceWorld();
             bloodMoonPersisted = false;
             persistedBloodMoonDay = -1;
             forcedBloodMoon = false;
-            forcedBloodMoonStartTime = -1; // CRITICAL FIX: Reset forced start time
-            forcedBloodMoonDuration = -1; // CRITICAL FIX: Reset forced duration
+            forcedBloodMoonStartTime = -1;
+            forcedBloodMoonDuration = -1;
             bloodMoonWorldId = null;
             save();
 
             // --- MythicMobs: stop tick loop + despawn blood-moon entities ---
             signalBloodMoonEnd();
 
-            // CRITICAL FIX: Force bossbar cleanup
             if (bloodMoonBar != null && !bloodMoonBar.getPlayers().isEmpty()) {
                 bloodMoonBar.removeAll();
             }
 
-            // CRITICAL FIX: Set time to day to prevent immediate restart
             if (world == null) {
                 sender.sendMessage("§cNo enabled world is currently loaded.");
                 return;

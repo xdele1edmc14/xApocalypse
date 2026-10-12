@@ -20,9 +20,6 @@ import java.util.concurrent.ThreadLocalRandom;
  * scent multipliers, surface snapping, rising animation), the zombie AI tick loop (gated by
  * the LOD system), and the {@code isPluginSpawning} flag that lets plugin-spawned zombies
  * bypass the CreatureSpawnEvent mob-list gate.
- *
- * Extracted verbatim from the original xApocalypse monolith (Bug M1 single-horde cap,
- * Bug C1/M2/20 plugin-spawning bracketing, Bug 19 animating-tag handling preserved).
  */
 public class HordeManager {
 
@@ -32,7 +29,7 @@ public class HordeManager {
     private final xApocalypseUtils utils;
     private final UndeadSpawner undeadSpawner;
 
-    // Bug 4 & 20 fix: flag so onEntitySpawn bypasses the mob-list check for plugin-spawned entities
+    // Prevents the spawn listener from processing plugin-created zombies twice.
     private boolean isPluginSpawning = false;
     private int remainingTerrainProbes = MAX_TERRAIN_PROBES_PER_CYCLE;
 
@@ -118,10 +115,7 @@ public class HordeManager {
         // Apply multiplier BEFORE calculating final amount
         int finalHordeSize = (int) ((baseAmount + ThreadLocalRandom.current().nextInt(safeVariance + 1)) * multiplier);
 
-        // Bug M1 fix: cap a single player's horde here, BEFORE the spawn loop. The blood moon ×
-        // scent multipliers could push this to the global max-total-zombies (e.g. 300), and that
-        // loop runs per eligible player per spawner tick — thousands of getHighestBlockAt() calls
-        // that tank TPS independent of actual entity count. The global cap stays as a secondary guard.
+        // Cap before terrain probes so multipliers cannot create a large main-thread search.
         int maxSingleHorde = Math.max(0,
                 plugin.getConfig().getInt("apocalypse-settings.max-single-horde-size", 30));
         finalHordeSize = Math.min(finalHordeSize, maxSingleHorde);

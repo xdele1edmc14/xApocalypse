@@ -32,16 +32,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
-/**
- * Owns the entire Zombie-Guts Immunity subsystem: the immunity state maps, the data.yml
- * persistence file, the bossbar + expiry-check tasks, granting immunity on guts consumption,
- * and restoring player state on join/quit.
- *
- * Extracted verbatim from the original xApocalypse monolith. All BUGFIX behaviour is
- * preserved — most importantly that all immunity timing uses System.currentTimeMillis()
- * (the real-world clock) rather than world.getFullTime(), which is warped by the blood-moon
- * system's world.setTime() calls.
- */
+/** Handles Zombie Guts immunity, persistence, boss bars, and player recovery. */
 public class ImmunityManager {
 
     private final xApocalypse plugin;
@@ -53,23 +44,14 @@ public class ImmunityManager {
     private AtomicYamlWriter dataWriter;
 
     // --- IMMUNITY TRACKING ---
-    // Bug fix: this was a List<UUID>, which permitted DUPLICATE entries. loadImmunityData()
-    // (on enable/reload) and onPlayerJoin() both add the UUID with no guard, while onPlayerQuit()
-    // intentionally leaves the entry to persist immunity — so a restart or reconnect during an
-    // active immunity listed the player twice ([uuid, uuid]). cleanUpPlayerState()'s
-    // List.remove() then stripped only ONE copy, leaving the player permanently flagged immune in
-    // memory (zombies ignored them; re-consuming Zombie Guts said "already immune") even though
-    // data.yml was correctly cleared. A Set cannot hold duplicates, so every expiry path now fully
-    // clears membership. This set is concurrent because PlaceholderAPI may read it asynchronously.
+    // PlaceholderAPI may read immunity state off the main thread.
     private final Set<UUID> immunePlayers = ConcurrentHashMap.newKeySet();
     private final Map<UUID, BossBar> immunityBossBars = new HashMap<>();
     private final Map<UUID, Long> immunityEndTime = new ConcurrentHashMap<>();
     private final Map<UUID, Double> originalHealth = new HashMap<>();
     private final Map<UUID, BukkitTask> scheduledTasks = new HashMap<>();
     private final long IMMUNITY_DURATION_TICKS = 10 * 60 * 20L;
-    // BUGFIX: immunity timing now runs off the real-world clock instead of world.getFullTime(),
-    // because world.setTime() calls elsewhere (blood moon start/stop/correction) warp full-time
-    // by up to +-24000 ticks instantly, which was corrupting every active immunity countdown.
+    // World time changes during Blood Moons, so immunity uses wall-clock time.
     private final long IMMUNITY_DURATION_MILLIS = IMMUNITY_DURATION_TICKS * 50L;
 
     public ImmunityManager(xApocalypse plugin, MessageManager messageManager) {
@@ -94,17 +76,12 @@ public class ImmunityManager {
     }
 
     private void loadImmunityData() {
-        // Fixed: Null check to prevent startup crash
         if (!dataConfig.isConfigurationSection("player-immunity")) {
             plugin.debugLog("No immunity data found in data.yml");
             return;
         }
 
-        // BUGFIX: use the real-world clock (System.currentTimeMillis()) instead of
-        // world.getFullTime() — full-time gets warped by world.setTime() calls in the
-        // blood moon system, which was the root cause of immunity timers freezing or
-        // jumping to nonsense values. We store an ABSOLUTE end timestamp so downtime
-        // between saves/restarts is accounted for automatically (just like a real clock).
+        // Absolute timestamps include time spent offline.
         long now = System.currentTimeMillis();
 
         for (String key : dataConfig.getConfigurationSection("player-immunity").getKeys(false)) {
@@ -131,10 +108,7 @@ public class ImmunityManager {
                     immunePlayers.add(uuid);
                     plugin.debugLog("Loaded active immunity for " + key);
 
-                    // BUGFIX: previously this never recreated the bossbar or scheduled a
-                    // removal task, so a player already online when the plugin (re)enabled
-                    // (e.g. /plugman reload) had no bossbar and depended entirely on the
-                    // periodic check task to ever clear their immunity.
+                    // Reloads can leave an immune player online.
                     Player online = Bukkit.getPlayer(uuid);
                     if (online != null && online.isOnline()) {
                         BossBar bar = Bukkit.createBossBar("§2§lZombie Guts Immunity", BarColor.GREEN, BarStyle.SOLID);
@@ -151,7 +125,6 @@ public class ImmunityManager {
     }
 
     public void save() {
-        // CRITICAL FIX: Add null safety checks
         if (dataConfig == null || dataFile == null || dataWriter == null) {
             plugin.getLogger().warning("Cannot save immunity data - data files not initialized");
             return;
@@ -164,10 +137,7 @@ public class ImmunityManager {
             double storedHealth = originalHealth.get(uuid);
             Long endTime = immunityEndTime.get(uuid);
 
-            // BUGFIX: only persist players who are actually still immune. Storing an
-            // absolute epoch-millis timestamp here (instead of a remaining-tick count
-            // derived from world.getFullTime()) means this value survives server
-            // downtime and blood-moon time skips correctly.
+            // Persist absolute time so restarts do not extend immunity.
             if (storedHealth > 0.0 && endTime != null) {
                 dataConfig.set(path + ".endTimeMillis", endTime);
                 dataConfig.set(path + ".originalHealth", storedHealth);
@@ -182,16 +152,12 @@ public class ImmunityManager {
 
     // === REPEATING TASKS ===
 
-    // CRITICAL FIX: immunity check task
     public void startCheckTask() {
         new org.bukkit.scheduler.BukkitRunnable() {
             @Override
             public void run() {
                 if (immunePlayers.isEmpty()) return;
 
-                // BUGFIX: was Bukkit.getWorlds().get(0).getFullTime() — world full-time gets
-                // warped by world.setTime() calls (blood moon start/stop/correction), which
-                // froze or scrambled this check entirely. System time is unaffected by that.
                 long now = System.currentTimeMillis();
                 boolean retiredOfflineState = false;
 
@@ -216,12 +182,7 @@ public class ImmunityManager {
                         }
                         plugin.debugLog("Immunity expired for player " + player.getName() + ", retargeting zombies");
 
-                        // BUGFIX: this branch used to call cleanUpPlayerState() directly,
-                        // which wipes originalHealth WITHOUT ever restoring the player's
-                        // max-health attribute. Any immunity that expired through this path
-                        // (e.g. one restored from data.yml after a restart, which never gets
-                        // a bossbar) left the player permanently stuck at reduced health.
-                        // expireImmunity() does the restore first, then cleans up.
+                        // Restore health before clearing the saved original value.
                         expireImmunity(player, "immunity.expired");
 
                         // Force nearby zombies to target the player
@@ -239,7 +200,6 @@ public class ImmunityManager {
             public void run() {
                 if (immunityBossBars.isEmpty()) return;
 
-                // BUGFIX: real-world clock instead of world.getFullTime() (see startCheckTask).
                 long now = System.currentTimeMillis();
 
                 for (UUID uuid : new ArrayList<>(immunityBossBars.keySet())) {
@@ -272,7 +232,6 @@ public class ImmunityManager {
         }.runTaskTimer(plugin, 0L, 5L);
     }
 
-    // CRITICAL FIX: method to retarget zombies near player
     private void retargetZombiesNearPlayer(Player player) {
         Location loc = player.getLocation();
         double radius = 50.0; // Check within 50 blocks
@@ -288,20 +247,11 @@ public class ImmunityManager {
         }
     }
 
-    /**
-     * BUGFIX: single source of truth for ending a player's Zombie Guts immunity.
-     * Previously there were three separate copies of this logic (here, the boss bar
-     * task, and the scheduled removal task) and one of them — the check task above —
-     * never restored the player's max health, which is why hearts sometimes never
-     * changed back after immunity wore off. Restoring health here, in one place,
-     * means every expiry path behaves identically.
-     */
+    /** Ends immunity and restores the player's health from every expiry path. */
     private void expireImmunity(Player player, String expiredMessageKey) {
         UUID uuid = player.getUniqueId();
 
-        // Bug M6 fix: the bossbar task (every 5 ticks) and the check task (every 20 ticks) can
-        // both hit the expiry edge on the same tick. Bail if this player is no longer immune so
-        // the "expired" message and health restore only happen once.
+        // Both expiry tasks can reach the same player on one tick.
         if (!immunePlayers.contains(uuid)) return;
 
         if (originalHealth.containsKey(uuid) && player.getAttribute(AttributeResolver.MAX_HEALTH) != null) {
@@ -370,8 +320,6 @@ public class ImmunityManager {
         }
 
         if (maxHealth != null) {
-            // BUGFIX: was player.getWorld().getFullTime() — corrupted by world.setTime()
-            // calls in the blood moon system. Use the real-world clock instead.
             long remainingMillis = 0;
             if (immunityEndTime.containsKey(uuid)) {
                 remainingMillis = immunityEndTime.get(uuid) - System.currentTimeMillis();
@@ -423,7 +371,7 @@ public class ImmunityManager {
         plugin.getLogger().warning("Recovered orphaned Zombie Guts health state for " + player.getName());
     }
 
-    /** Immune-player cleanup on quit. The listener invokes {@link #save()} afterwards (parity with original ordering). */
+    /** Removes live UI and tasks while keeping the saved immunity state. */
     public void onPlayerQuit(Player player) {
         UUID uuid = player.getUniqueId();
 
@@ -436,9 +384,7 @@ public class ImmunityManager {
         }
     }
 
-    // ==================================================================================
-    // ZOMBIE GUTS — item factory, identity, activation, and rare drop
-    // ==================================================================================
+    // Zombie Guts item and activation
 
     /**
      * Single source of truth for the Zombie Guts ItemStack. Used by the /xa item command and the
@@ -467,13 +413,7 @@ public class ImmunityManager {
         return marker != null && marker == (byte) 1;
     }
 
-    /**
-     * Primary activation path: a right-click. BUGFIX — the old code only granted immunity from
-     * {@link PlayerItemConsumeEvent}, which never fires when the hunger bar is full or in Creative
-     * mode (Zombie Guts is rotten flesh — normal food), so eating it often did nothing at all and
-     * hearts never dropped to 5. Driving activation off a right-click makes it independent of
-     * hunger level and game mode.
-     */
+    /** Activates Zombie Guts even when vanilla eating is unavailable. */
     public void handleGutsInteract(PlayerInteractEvent event) {
         if (!plugin.isZombieGutsEnabled()) return;
 
@@ -531,9 +471,6 @@ public class ImmunityManager {
             return;
         }
 
-        // BUGFIX: this null check used to run AFTER originalHealth/immunePlayers were already
-        // mutated, so a null world would leave the player permanently flagged immune with no
-        // bossbar and no removal task.
         if (player.getWorld() == null) return;
 
         double maxHealth = 10.0;
@@ -547,9 +484,6 @@ public class ImmunityManager {
             player.setHealth(Math.min(player.getHealth(), maxHealth));
         }
 
-        // BUGFIX: was player.getWorld().getFullTime() + IMMUNITY_DURATION_TICKS — world full-time
-        // is warped by world.setTime() calls in the blood moon system (forced/natural start, stop,
-        // and the night-time correction), which is what made this timer freeze or jump.
         long endTime = System.currentTimeMillis() + IMMUNITY_DURATION_MILLIS;
         immunityEndTime.put(uuid, endTime);
         immunePlayers.add(uuid);
@@ -564,7 +498,7 @@ public class ImmunityManager {
 
         scheduleImmunityRemoval(player, IMMUNITY_DURATION_TICKS);
 
-        // BUGFIX: persist immediately — a crash or /stop before the player quit used to lose the grant.
+        // Save now so a sudden stop cannot lose the grant.
         save();
 
         player.sendMessage(messageManager.get("immunity.consumed"));

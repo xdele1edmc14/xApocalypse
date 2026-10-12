@@ -24,19 +24,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
 
-/**
- * xApocalypse — the {@link JavaPlugin} entry point. After the decomposition refactor this
- * class is a slim <b>composition root</b> (wires up all managers in {@code onEnable}) and a
- * <b>facade</b>: it owns general config + world helpers + the GriefPrevention hook, and exposes
- * thin delegate methods so the pre-existing support classes (xApocalypseUtils, UndeadSpawner,
- * HordeSpawnerTask, MythicMobsManager, PerformanceWatchdog) keep talking to {@code plugin.*}
- * without knowing about the new managers. This keeps the dependency graph a star (everyone
- * depends on the facade; the facade depends on everyone) rather than a circular mesh.
- *
- * Subsystems live in dedicated managers:
- *   {@link BloodMoonManager}, {@link ImmunityManager}, {@link ScentManager}, {@link HordeManager}.
- * Events live in {@link xApocalypseListener}; commands in {@link xApocalypseCommand}.
- */
+/** Wires xApocalypse managers, listeners, commands, and optional integrations. */
 public class xApocalypse extends JavaPlugin {
 
     private static final int CHUNK_CLEANUP_BATCH_SIZE = 8;
@@ -79,9 +67,7 @@ public class xApocalypse extends JavaPlugin {
         // This is what lets an update "just work" without a manual config delete.
         synchronizeConfig();
 
-        // CRITICAL FIX: Initialize blood moon data BEFORE loading config values.
-        // BloodMoonManager.load() creates BloodMoonData.yml and reads persisted state; it must
-        // not touch MessageManager (which isn't constructed yet).
+        // Blood Moon state must load before config values are applied.
         bloodMoon = new BloodMoonManager(this);
         bloodMoon.load(getDataFolder());
 
@@ -118,10 +104,7 @@ public class xApocalypse extends JavaPlugin {
         // --- MythicMobs Integration ---
         mythicMobsManager = new MythicMobsManager(this);
 
-        // --- Performance Watchdog Setup ---
-        // Bug C2 fix: only construct it here. start() is called AFTER startSpawnerTask()
-        // below, because startSpawnerTask() calls cancelTasks(this) which would otherwise
-        // immediately kill the watchdog's TPS-monitor and LOD tasks.
+        // startSpawnerTask cancels plugin tasks, so the watchdog starts afterwards.
         performanceWatchdog = new PerformanceWatchdog(this);
 
         getServer().getPluginManager().registerEvents(new xApocalypseListener(this), this);
@@ -150,8 +133,6 @@ public class xApocalypse extends JavaPlugin {
             debugLog("Resumed MythicMobs Blood Moon loop after enable.");
         }
 
-        // Bug C2 fix: start the watchdog AFTER startSpawnerTask() so its tasks survive
-        // the cancelTasks(this) call inside startSpawnerTask().
         performanceWatchdog.start();
 
         printStartupBanner();
@@ -181,7 +162,6 @@ public class xApocalypse extends JavaPlugin {
             immunity.save();
         }
 
-        // CRITICAL FIX: Save blood moon persistence data on shutdown using separate file
         if (bloodMoon != null) {
             bloodMoon.suspendAtmosphere();
             bloodMoon.save();
@@ -199,9 +179,7 @@ public class xApocalypse extends JavaPlugin {
             bloodMoon.removeBossBar();
         }
 
-        // Bug C2 fix: restore any zombies still mid rise-animation BEFORE tasks are cancelled and
-        // the worlds save, otherwise their cancelled animation timers leave them permanently
-        // invulnerable, AI-less and frozen (the LOD system never recovers an ANIMATING-tagged zombie).
+        // Finish rise animations before their tasks are cancelled.
         if (undeadSpawner != null) {
             undeadSpawner.finalizeAllAnimations();
         }
@@ -269,10 +247,8 @@ public class xApocalypse extends JavaPlugin {
             mythicMobsManager.loadConfig();
         }
         startSpawnerTask();
-        immunity.startCheckTask(); // CRITICAL FIX: Restart immunity check task on reload
+        immunity.startCheckTask();
         bloodMoon.resumeAtmosphereIfActive();
-        // Bug C2 fix: reload the watchdog AFTER startSpawnerTask() so its tasks
-        // are not killed by the cancelTasks(this) call inside startSpawnerTask().
         if (performanceWatchdog != null) {
             performanceWatchdog.reload();
         }

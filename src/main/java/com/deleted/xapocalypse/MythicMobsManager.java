@@ -55,13 +55,7 @@ public class MythicMobsManager {
     private float spawnSoundVolume;
     private float spawnSoundPitch;
     private double spawnSoundRadius;
-    // Fix RC4: Track consecutive "blood moon inactive" ticks before stopping the loop.
-    // A single false return from isBloodMoonActive() can occur during a cross-world
-    // teleport, a BetterRTP staging teleport, or a brief state-write race between the
-    // blood moon task and the spawn tick task.  Stopping immediately on the first miss
-    // is a one-way door — the loop is gone for the rest of the blood moon.
-    // Three consecutive misses (~15 s at the default 100-tick interval) is enough to
-    // confirm the blood moon is genuinely over without being sensitive to transient blips.
+    // Three misses tolerate brief world transitions without orphaning the spawn loop.
     private int bloodMoonMissCount = 0;
 
     enum CommandSpawnResult {
@@ -273,14 +267,7 @@ public class MythicMobsManager {
             public void run() {
                 World world = MythicMobsManager.this.plugin.getBloodMoon().getReferenceWorld();
 
-                // Delegate the active check entirely to the plugin — it already handles
-                // forced blood moon real-time elapsed vs natural night-time checks.
                 if (world == null || !MythicMobsManager.this.plugin.isBloodMoonActive(world)) {
-                    // Fix RC4: Use a miss counter instead of stopping on the first false return.
-                    // Cross-world teleports (Multiverse /mvtp, BetterRTP) can cause a single
-                    // tick where isBloodMoonActive() transiently returns false even though the
-                    // blood moon is still active.  Stopping immediately makes that a permanent
-                    // one-way door.  Require 3 consecutive misses (~15 s) before giving up.
                     if (++MythicMobsManager.this.bloodMoonMissCount >= 3) {
                         MythicMobsManager.this.stopSpawnTickLoop();
                     }
@@ -438,10 +425,7 @@ public class MythicMobsManager {
         return nearest;
     }
 
-    // Bug C fix: Bukkit.getEntity() returns null when the entity's chunk is unloaded, not just when dead.
-    // Treating null as "dead" caused the cap to be bypassed whenever players ran far enough away.
-    // Fix: only remove a UUID when the entity is confirmed to exist AND be dead.
-    // If null, the chunk is simply unloaded — keep the UUID in the set.
+    // A null Bukkit entity may only be in an unloaded chunk, so keep its UUID tracked.
     private void pruneDeadMutants() {
         long now = System.currentTimeMillis();
         if (shouldRefreshTrackedMutants(lastTrackedMutantRefreshMillis, now)) {

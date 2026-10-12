@@ -30,9 +30,9 @@ public class xApocalypseUtils {
     public static final NamespacedKey LAST_RAGE_KEY = new NamespacedKey("xapocalypse", "last_rage");
     public static final NamespacedKey LAST_WEB_KEY = new NamespacedKey("xapocalypse", "last_web");
     public static final NamespacedKey BURSTER_PRIMED_KEY = new NamespacedKey("xapocalypse", "burster_primed");
-    // Bug 2 fix: dedicated PDC key for acid spit projectiles (ZOMBIE_TYPE_KEY belongs to zombie entities, not projectiles)
+    // Projectiles need their own marker; zombie type belongs to the shooter.
     public static final NamespacedKey ACID_SPIT_KEY = new NamespacedKey("xapocalypse", "acid_spit");
-    // Bug 19 fix: marks a zombie as mid-rise-animation so the LOD system won't call setAI(false) on it
+    // Keeps LOD changes away from zombies that are still rising.
     public static final NamespacedKey ANIMATING_KEY = new NamespacedKey("xapocalypse", "animating");
     // Marker placed on the Zombie Guts ItemStack so it is identified by PDC rather than display name.
     public static final NamespacedKey ZOMBIE_GUTS_KEY = new NamespacedKey("xapocalypse", "zombie_guts_item");
@@ -99,8 +99,7 @@ public class xApocalypseUtils {
         for (ZombieType type : ZombieType.values()) {
             // VETERAN is not spawned randomly (it is transformed from kills, never rolled)
             if (type == ZombieType.VETERAN || type == ZombieType.NORMAL) continue;
-            // Bug M4 fix: honor per-class enabled flags so disabling a class removes it from the
-            // random spawn pool (previously these flags were never read).
+            // Disabled classes stay out of the random spawn pool.
             if (!isClassEnabled(type)) continue;
             double weight = Math.max(0.0,
                     plugin.getConfig().getDouble("zombie-classes.weights." + type.name(), 0.1));
@@ -214,13 +213,11 @@ public class xApocalypseUtils {
     }
 
     private ZombieType getRandomZombieType() {
-        // Bug 14 fix: guard against zero/empty weights
         if (totalWeight <= 0 || spawnWeights.isEmpty()) return ZombieType.NORMAL;
         double random = ThreadLocalRandom.current().nextDouble() * totalWeight;
         double cumulative = 0.0;
         for (Map.Entry<ZombieType, Double> entry : spawnWeights.entrySet()) {
             cumulative += entry.getValue();
-            // Bug 14 fix: strict < instead of <= eliminates last-entry boundary bias
             if (random < cumulative) return entry.getKey();
         }
         // Floating-point edge case fallback — return an available entry rather than a hardcoded type.
@@ -245,7 +242,7 @@ public class xApocalypseUtils {
     }
 
     private void applyZombieHead(Zombie zombie, ZombieType type) {
-        // Minor fix: honor visuals.use-nametags (previously ignored — zombies always got a nametag).
+        // Nametags are optional for quieter visuals.
         if (!plugin.getConfig().getBoolean("visuals.use-nametags", true)) {
             zombie.setCustomName(null);
             zombie.setCustomNameVisible(false);
@@ -294,8 +291,7 @@ public class xApocalypseUtils {
                 setZombieStat(zombie, AttributeResolver.ATTACK_DAMAGE, baseDamage);
                 setZombieStat(zombie, AttributeResolver.MOVEMENT_SPEED, baseSpeed);
                 
-                // CRITICAL FIX: Add permanent fire resistance to all custom zombie types
-                // NORMAL zombies don't get fire immunity (they can burn normally)
+                // Custom classes are protected from accidental daylight damage.
             }
             case SWARMER -> {
                 // Basic zombie - standard stats
@@ -358,15 +354,12 @@ public class xApocalypseUtils {
                 setZombieStat(zombie, AttributeResolver.ATTACK_DAMAGE, baseDamage);
                 setZombieStat(zombie, AttributeResolver.MOVEMENT_SPEED, baseSpeed);
                 
-                // CRITICAL FIX: Proper fire immunity for scorched zombies
                 zombie.setFireTicks(Integer.MAX_VALUE); // Immune to fire
-                // CRITICAL FIX: Add fire resistance potion effect to prevent self-damage
                 zombie.addPotionEffect(new PotionEffect(PotionEffectType.FIRE_RESISTANCE, Integer.MAX_VALUE, 0, false, false));
             }
             case PSYCHOPATH -> {
                 // Berserker - higher damage plus a small passive speed bonus
                 double attackBonus = plugin.getConfig().getDouble("zombie-classes.psychopath.attack-bonus", 2.0);
-                // Bug M1 fix: honor zombie-classes.psychopath.speed-bonus (was never applied).
                 double speedBonus = plugin.getConfig().getDouble("zombie-classes.psychopath.speed-bonus", 0.08);
                 setZombieStat(zombie, AttributeResolver.MAX_HEALTH, baseHealth);
                 zombie.setHealth(baseHealth);
@@ -404,7 +397,6 @@ public class xApocalypseUtils {
                 setZombieStat(zombie, AttributeResolver.ATTACK_DAMAGE, baseDamage);
                 setZombieStat(zombie, AttributeResolver.MOVEMENT_SPEED, baseSpeed);
                 
-                // CRITICAL FIX: Only frost zombies get blue leather chestplate
                 ItemStack chestplate = new ItemStack(Material.LEATHER_CHESTPLATE);
                 if (chestplate.getItemMeta() instanceof org.bukkit.inventory.meta.LeatherArmorMeta meta) {
                     meta.setColor(org.bukkit.Color.AQUA);
@@ -474,8 +466,7 @@ public class xApocalypseUtils {
 
     private void tickNurseAI(Zombie nurse) {
         long now = System.currentTimeMillis();
-        // Bug M1 fix: honor the configured heal interval/radius/amount/target-cap (these keys were
-        // previously ignored — the values below were all hardcoded).
+        // Read nurse limits once per healing pass.
         Long lastHeal = nurse.getPersistentDataContainer().get(LAST_HEAL_KEY, PersistentDataType.LONG);
         if (lastHeal != null && (now - lastHeal) < nurseIntervalMs) return;
         nurse.getPersistentDataContainer().set(LAST_HEAL_KEY, PersistentDataType.LONG, now);
@@ -624,7 +615,6 @@ public class xApocalypseUtils {
         if (maxHealth != null && psycho.getHealth() < maxHealth.getValue() * 0.5) {
             long now = System.currentTimeMillis();
             Long lastRage = psycho.getPersistentDataContainer().get(LAST_RAGE_KEY, PersistentDataType.LONG);
-            // Bug M1 fix: honor zombie-classes.psychopath.rage-cooldown-seconds (was hardcoded 10 s).
             if (lastRage == null || (now - lastRage) > psychopathRageCooldownMs) {
                 psycho.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, 100, 1));
                 psycho.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 100, 1));
@@ -789,7 +779,6 @@ public class xApocalypseUtils {
         UUID id = burster.getUniqueId();
         if (activeBursterFuses.containsKey(id)) return;
 
-        // CRITICAL FIX: Add burster fuse to tracking map
         BukkitRunnable fuse = new BukkitRunnable() {
             private int ticks = 0;
             
@@ -825,7 +814,6 @@ public class xApocalypseUtils {
         fuse.runTaskTimer(plugin, 0, 1);
     }
     
-    // CRITICAL FIX: Add method to cancel burster fuse
     public void cancelBursterFuse(Zombie burster) {
         UUID id = burster.getUniqueId();
         BukkitRunnable fuse = activeBursterFuses.remove(id);
@@ -884,11 +872,7 @@ public class xApocalypseUtils {
 
     // === SCORCHED EVENT HANDLERS ===
 
-    /**
-     * Bug M2 fix: a Scorched zombie sets its melee victim on fire for the configured duration.
-     * Previously the class only emitted cosmetic flame particles and had no on-hit effect at all,
-     * so zombie-classes.scorched.fire-duration-seconds did nothing.
-     */
+    /** Applies the Scorched zombie's configured melee burn. */
     public void handleScorchedHit(Zombie scorched, Player victim) {
         if (scorchedFireTicks <= 0) return;
         victim.setFireTicks(Math.max(victim.getFireTicks(), scorchedFireTicks));
@@ -896,10 +880,7 @@ public class xApocalypseUtils {
 
     // === PSYCHOPATH EVENT HANDLERS ===
 
-    /**
-     * Bug M1 fix: a Psychopath's melee applies a short "bleed" (Wither) for the configured duration.
-     * Previously zombie-classes.psychopath.bleed-duration-seconds was never read.
-     */
+    /** Applies the Psychopath zombie's configured Wither bleed. */
     public void handlePsychopathHit(Zombie psycho, Player victim) {
         if (psychopathBleedDurationTicks <= 0) return;
         victim.addPotionEffect(new PotionEffect(PotionEffectType.WITHER,

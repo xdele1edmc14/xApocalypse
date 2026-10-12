@@ -23,11 +23,10 @@ public class PerformanceWatchdog {
     
     private long checkIntervalTicks;
     
-    // Minor fix: implement spawningPaused so HordeSpawnerTask can query it
     private boolean spawningPaused = false;
     
     // LOD (Level of Detail) system for distance-based AI throttling
-    // Bug 7 fix: bounded LinkedHashMap — evicts dead/invalid entries and caps at 1000 to prevent unbounded growth
+    // Keep LOD tracking bounded when zombies unload without a death event.
     private final Map<Zombie, Long> zombieLastAITick = new LinkedHashMap<>(256, 0.75f, false) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<Zombie, Long> eldest) {
@@ -82,9 +81,7 @@ public class PerformanceWatchdog {
     private void checkPerformance() {
         try {
             double currentTPS = getCurrentTPS();
-            // Minor fix: honor performance.tps-threshold (previously the config value was ignored and
-            // the thresholds were hardcoded 10/15). Pause new spawns below the threshold; resume once
-            // TPS recovers a little above it (hysteresis avoids rapid flapping around the threshold).
+            // A small recovery margin prevents rapid pause/resume flapping.
             double tpsThreshold = plugin.getConfig().getDouble("performance.tps-threshold", 15.0);
             if (!Double.isFinite(tpsThreshold)) tpsThreshold = 15.0;
             tpsThreshold = Math.max(0.0, Math.min(18.5, tpsThreshold));

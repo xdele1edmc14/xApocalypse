@@ -248,7 +248,6 @@ bloodmoon:
   sleep:
     blocked: true
     reset-phantom-timer: true  # Bed attempts still count as resting for phantom prevention
-  # CRITICAL FIX: Add force blood moon configuration
   force-duration-minutes: 10  # Duration for /xa forcebloodmoon command
   # Sound played to online players in enabled and lobby worlds when a Blood Moon begins.
   start-sound:

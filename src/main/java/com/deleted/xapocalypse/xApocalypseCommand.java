@@ -33,10 +33,6 @@ import java.util.concurrent.ThreadLocalRandom;
  *   /xa forcebloodmoon [minutes]   (alias fbm)    force a blood moon
  *   /xa stopbloodmoon              (alias sbm)    end a blood moon
  * </pre>
- *
- * All permissions, argument parsing and bug-fixes (Bug M4 surface-snap, gate-bypass, Bug M5
- * enabled-world resolution) are preserved verbatim from the original per-command implementation —
- * only the dispatch layer changed from {@code command.getName()} to {@code args[0]}.
  */
 public class xApocalypseCommand implements CommandExecutor {
 
@@ -212,7 +208,6 @@ public class xApocalypseCommand implements CommandExecutor {
             return true;
         }
 
-        // CRITICAL FIX: Parse duration argument
         int duration = bloodMoon.getDefaultForceDuration(); // Default from config
         if (args.length >= 1) {
             try {

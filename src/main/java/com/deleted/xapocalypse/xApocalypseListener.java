@@ -68,8 +68,7 @@ public class xApocalypseListener implements Listener {
                 utils.cancelBursterFuse(zombie);
             }
 
-            // CRITICAL FIX: Ensure proper cleanup on death to prevent animation bugs
-            // Remove any lingering potion effects that could cause issues
+            // Remove effects that should not survive the death tick.
             zombie.removePotionEffect(org.bukkit.potion.PotionEffectType.FIRE_RESISTANCE);
             zombie.removePotionEffect(org.bukkit.potion.PotionEffectType.SLOWNESS);
             zombie.removePotionEffect(org.bukkit.potion.PotionEffectType.SPEED);
@@ -89,9 +88,7 @@ public class xApocalypseListener implements Listener {
             }
         }
 
-        // Bug M3 fix: scent-gain-on-kill stays gated by the scent toggle, but the VETERAN promotion
-        // below must NOT be — previously a single early-return here silently disabled veteran
-        // transformation whenever the scent system was turned off.
+        // Scent is optional; veteran promotion is independent.
         if (plugin.getConfig().getBoolean("scent-system.enabled", true)) {
             Player killer = event.getEntity().getKiller();
             if (killer != null) {
@@ -99,23 +96,16 @@ public class xApocalypseListener implements Listener {
             }
         }
 
-        // Fixed: VETERAN transformation - check if a zombie killed the entity
         Entity deadEntity = event.getEntity();
 
-        // Bug M3 fix: only a PLAYER kill should promote a zombie to VETERAN. Without this gate,
-        // any entity killed near a zombie (farm animals, armor stands) triggered the upgrade,
-        // letting players cheaply mass-promote a horde by herding passive mobs into it.
+        // Only a player kill can promote the attacking zombie.
         if (deadEntity instanceof Player && deadEntity.getLastDamageCause() instanceof EntityDamageByEntityEvent damageEvent) {
             Entity damager = damageEvent.getDamager();
 
             // If a zombie killed this entity, transform it to veteran
             if (damager instanceof Zombie killerZombie) {
                 if (plugin.getConfig().getBoolean("zombie-classes.veteran.permanent", true)) {
-                    // Bug fix: defer the promotion one tick. The player's death message is rendered
-                    // from the killer's display name during THIS death tick — promoting (renaming to
-                    // "★ Veteran") synchronously here leaked the Veteran name into every death message,
-                    // regardless of the zombie's actual class. Running it next tick lets the death
-                    // message keep the original name while the zombie still becomes a Veteran.
+                    // Defer the rename so the death message keeps the zombie's original class.
                     org.bukkit.Bukkit.getScheduler().runTaskLater(plugin, () -> {
                         if (killerZombie.isValid() && !killerZombie.isDead()) {
                             utils.transformToVeteran(killerZombie);
@@ -145,7 +135,6 @@ public class xApocalypseListener implements Listener {
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
 
-        // CRITICAL FIX: Clean up any existing bossbars for this player
         bloodMoon.cleanupBossbarForPlayer(player);
 
         // Replay today's pre-blood-moon warning to late joiners (no-op if none fired today)
@@ -161,7 +150,6 @@ public class xApocalypseListener implements Listener {
 
         immunity.onPlayerQuit(player);
 
-        // CRITICAL FIX: Clean up blood moon bossbar when player quits
         bloodMoon.onPlayerQuit(player);
 
         scent.onPlayerQuit(uuid);
@@ -171,11 +159,7 @@ public class xApocalypseListener implements Listener {
 
     @EventHandler
     public void onEntitySpawn(CreatureSpawnEvent event) {
-        // Bug C1/M2 fix: plugin-spawned zombies must bypass the mob-list gate and the
-        // assignZombieType call here — the spawner code assigns the type itself after
-        // world.spawnEntity() returns. Without this, every plugin-spawned zombie got a
-        // second random type roll (overwriting the intended one), and a misconfigured
-        // whitelist could silently cancel all plugin spawns.
+        // The plugin spawner assigns its own type after spawnEntity returns.
         if (horde.isPluginSpawning()) return;
 
         // MythicMobs fires CreatureSpawnEvent while constructing its base Bukkit entity. Never
@@ -302,9 +286,7 @@ public class xApocalypseListener implements Listener {
             switch (type) {
                 case WEBBER -> utils.handleWebberHit(zombie, player);
                 case FROST -> utils.handleFrostHit(zombie, player);
-                // Bug M2 fix: Scorched now actually burns its victim on hit.
                 case SCORCHED -> utils.handleScorchedHit(zombie, player);
-                // Bug M1 fix: Psychopath applies its configured "bleed" on hit.
                 case PSYCHOPATH -> utils.handlePsychopathHit(zombie, player);
                 default -> {
                     // No special handling for other types
@@ -326,9 +308,7 @@ public class xApocalypseListener implements Listener {
 
     @EventHandler
     public void onProjectileHit(ProjectileHitEvent event) {
-        // Bug C3 fix: spitter fires a LlamaSpit (see tickSpitterAI), not a Snowball, and
-        // tags it with ACID_SPIT_KEY/BYTE — not ZOMBIE_TYPE_KEY/STRING. Both the projectile
-        // type check and the PDC read were wrong, so the poison effect never applied.
+        // Spitter projectiles carry a dedicated byte marker.
         if (!(event.getEntity() instanceof LlamaSpit spit)) return;
 
         Byte acidTag = spit.getPersistentDataContainer().get(xApocalypseUtils.ACID_SPIT_KEY, PersistentDataType.BYTE);
