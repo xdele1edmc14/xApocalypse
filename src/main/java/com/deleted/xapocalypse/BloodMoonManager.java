@@ -212,10 +212,15 @@ public class BloodMoonManager {
         }
 
         UUID snapshotWorldId = atmosphere.snapshotWorldId();
-        if ((bloodMoonPersisted || forcedBloodMoon) && bloodMoonWorldId != null
-                && snapshotWorldId != null && !bloodMoonWorldId.equals(snapshotWorldId)) {
-            plugin.getLogger().warning("Blood Moon world and weather snapshot do not match; clearing the event safely.");
-            invalidActiveWorldState = true;
+        if (bloodMoonPersisted || forcedBloodMoon) {
+            if (atmosphere.isCurrentStateFormat() && snapshotWorldId == null) {
+                plugin.getLogger().warning("Active Blood Moon has no valid weather snapshot; clearing the event safely.");
+                invalidActiveWorldState = true;
+            } else if (bloodMoonWorldId != null && snapshotWorldId != null
+                    && !bloodMoonWorldId.equals(snapshotWorldId)) {
+                plugin.getLogger().warning("Blood Moon world and weather snapshot do not match; clearing the event safely.");
+                invalidActiveWorldState = true;
+            }
         }
         // Warning dedupe: restore the last day a pre-blood-moon warning broadcast on so a
         // same-day restart doesn't fire the warning twice.
