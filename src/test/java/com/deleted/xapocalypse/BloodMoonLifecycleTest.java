@@ -255,6 +255,32 @@ class BloodMoonLifecycleTest {
     }
 
     @Test
+    void activeStateWithMistypedVersionIsCleared() throws Exception {
+        YamlConfiguration data = currentSnapshotData();
+        data.set("bloodmoon.atmosphere.state-version", "2");
+        data.save(tempDir.resolve("BloodMoonData.yml").toFile());
+
+        BloodMoonManager manager = new BloodMoonManager(plugin);
+        manager.load(tempDir.toFile());
+        manager.close();
+
+        assertFalse(manager.isPersisted());
+    }
+
+    @Test
+    void activeStateWithUnknownFutureVersionIsCleared() throws Exception {
+        YamlConfiguration data = currentSnapshotData();
+        data.set("bloodmoon.atmosphere.state-version", 3);
+        data.save(tempDir.resolve("BloodMoonData.yml").toFile());
+
+        BloodMoonManager manager = new BloodMoonManager(plugin);
+        manager.load(tempDir.toFile());
+        manager.close();
+
+        assertFalse(manager.isPersisted());
+    }
+
+    @Test
     void legacyActiveStateWithoutAWorldIdStillMigratesOnce() throws Exception {
         YamlConfiguration data = persistedEventData();
         data.set("bloodmoon.world-id", null);

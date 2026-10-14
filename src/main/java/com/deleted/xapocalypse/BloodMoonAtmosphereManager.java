@@ -106,7 +106,10 @@ final class BloodMoonAtmosphereManager {
     }
 
     void loadState(FileConfiguration data) {
-        loadedStateVersion = data.getInt(STATE_PATH + ".state-version", 0);
+        String versionPath = STATE_PATH + ".state-version";
+        loadedStateVersion = !data.contains(versionPath)
+                ? 0
+                : data.isInt(versionPath) ? data.getInt(versionPath) : Integer.MIN_VALUE;
         String worldId = data.getString(STATE_PATH + ".snapshot.world-id");
         snapshot = null;
         stormApplied = false;
@@ -428,11 +431,11 @@ final class BloodMoonAtmosphereManager {
     }
 
     boolean isCurrentStateFormat() {
-        return loadedStateVersion >= STATE_VERSION;
+        return loadedStateVersion == STATE_VERSION;
     }
 
     boolean hasUnsupportedStateFormat() {
-        return loadedStateVersion > 0 && loadedStateVersion < STATE_VERSION;
+        return loadedStateVersion != 0 && loadedStateVersion != STATE_VERSION;
     }
 
     private record WeatherSnapshot(UUID worldId,
