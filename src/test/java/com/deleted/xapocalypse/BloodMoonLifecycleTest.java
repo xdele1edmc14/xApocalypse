@@ -197,8 +197,28 @@ class BloodMoonLifecycleTest {
     @Test
     void currentActiveStateWithMalformedSnapshotUuidIsCleared() throws Exception {
         YamlConfiguration data = persistedEventData();
-        data.set("bloodmoon.atmosphere.state-version", 1);
+        data.set("bloodmoon.atmosphere.state-version", 2);
         data.set("bloodmoon.atmosphere.snapshot.world-id", "not-a-uuid");
+        data.save(tempDir.resolve("BloodMoonData.yml").toFile());
+
+        BloodMoonManager manager = new BloodMoonManager(plugin);
+        manager.load(tempDir.toFile());
+        manager.close();
+
+        assertFalse(manager.isPersisted());
+    }
+
+    @Test
+    void versionOneActiveStateWithoutClearWeatherTimerIsCleared() throws Exception {
+        YamlConfiguration data = persistedEventData();
+        data.set("bloodmoon.atmosphere.state-version", 1);
+        data.set("bloodmoon.atmosphere.snapshot.world-id", WORLD_ID.toString());
+        data.set("bloodmoon.atmosphere.snapshot.storm", false);
+        data.set("bloodmoon.atmosphere.snapshot.thunder", false);
+        data.set("bloodmoon.atmosphere.snapshot.weather-duration", 1);
+        data.set("bloodmoon.atmosphere.snapshot.thunder-duration", 1);
+        data.set("bloodmoon.atmosphere.snapshot.storm-applied", true);
+        data.set("bloodmoon.atmosphere.snapshot.thunder-applied", true);
         data.save(tempDir.resolve("BloodMoonData.yml").toFile());
 
         BloodMoonManager manager = new BloodMoonManager(plugin);

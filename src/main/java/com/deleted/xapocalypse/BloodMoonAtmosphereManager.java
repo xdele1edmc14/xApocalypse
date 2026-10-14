@@ -21,7 +21,7 @@ import java.util.random.RandomGenerator;
 final class BloodMoonAtmosphereManager {
 
     private static final String STATE_PATH = "bloodmoon.atmosphere";
-    private static final int STATE_VERSION = 1;
+    private static final int STATE_VERSION = 2;
     private static final double RARE_SCARE_CHANCE = 0.01;
     private static final String RARE_SCARE_SOUND = "minecraft:entity.creeper.primed";
 
@@ -112,18 +112,25 @@ final class BloodMoonAtmosphereManager {
         stormApplied = false;
         thunderApplied = false;
         if (worldId != null) {
-            try {
-                snapshot = new WeatherSnapshot(
-                        UUID.fromString(worldId),
-                        data.getBoolean(STATE_PATH + ".snapshot.storm"),
-                        data.getBoolean(STATE_PATH + ".snapshot.thunder"),
-                        data.getInt(STATE_PATH + ".snapshot.weather-duration"),
-                        data.getInt(STATE_PATH + ".snapshot.thunder-duration"),
-                        data.getInt(STATE_PATH + ".snapshot.clear-weather-duration"));
-                stormApplied = data.getBoolean(STATE_PATH + ".snapshot.storm-applied", false);
-                thunderApplied = data.getBoolean(STATE_PATH + ".snapshot.thunder-applied", false);
-            } catch (IllegalArgumentException exception) {
-                plugin.getLogger().warning("Invalid Blood Moon atmosphere world UUID; ignoring saved weather.");
+            if (hasUnsupportedStateFormat()) {
+                plugin.getLogger().warning("Outdated Blood Moon weather snapshot; clearing the active event safely.");
+            } else if (isCurrentStateFormat()
+                    && !data.isInt(STATE_PATH + ".snapshot.clear-weather-duration")) {
+                plugin.getLogger().warning("Incomplete Blood Moon weather snapshot; clearing the active event safely.");
+            } else {
+                try {
+                    snapshot = new WeatherSnapshot(
+                            UUID.fromString(worldId),
+                            data.getBoolean(STATE_PATH + ".snapshot.storm"),
+                            data.getBoolean(STATE_PATH + ".snapshot.thunder"),
+                            data.getInt(STATE_PATH + ".snapshot.weather-duration"),
+                            data.getInt(STATE_PATH + ".snapshot.thunder-duration"),
+                            data.getInt(STATE_PATH + ".snapshot.clear-weather-duration"));
+                    stormApplied = data.getBoolean(STATE_PATH + ".snapshot.storm-applied", false);
+                    thunderApplied = data.getBoolean(STATE_PATH + ".snapshot.thunder-applied", false);
+                } catch (IllegalArgumentException exception) {
+                    plugin.getLogger().warning("Invalid Blood Moon atmosphere world UUID; ignoring saved weather.");
+                }
             }
         }
         rareScareUsed = data.getBoolean(STATE_PATH + ".rare-scare-used", false);
@@ -254,6 +261,7 @@ final class BloodMoonAtmosphereManager {
         }
 
         boolean changed = false;
+        boolean weatherWasApplied = stormApplied || thunderApplied;
         boolean shouldForceStorm = enabled && weatherEnabled && forceStorm;
         boolean shouldForceThunder = enabled && weatherEnabled && forceThunder;
 
@@ -280,6 +288,9 @@ final class BloodMoonAtmosphereManager {
             thunderApplied = false;
             changed = true;
         }
+        if (weatherWasApplied && !stormApplied && !thunderApplied) {
+            restoreClearWeatherDuration();
+        }
         return changed;
     }
 
@@ -289,13 +300,17 @@ final class BloodMoonAtmosphereManager {
             return;
         }
 
+        boolean weatherWasApplied = stormApplied || thunderApplied;
         if (stormApplied) restoreStorm();
         if (thunderApplied) restoreThunder();
-        if (restorePreviousWeather && (stormApplied || thunderApplied)) {
-            activeWorld.setClearWeatherDuration(snapshot.clearWeatherDuration());
-        }
+        if (weatherWasApplied) restoreClearWeatherDuration();
         stormApplied = false;
         thunderApplied = false;
+    }
+
+    private void restoreClearWeatherDuration() {
+        if (!restorePreviousWeather) return;
+        activeWorld.setClearWeatherDuration(snapshot.clearWeatherDuration());
     }
 
     private void restoreStorm() {
@@ -403,6 +418,10 @@ final class BloodMoonAtmosphereManager {
 
     boolean isCurrentStateFormat() {
         return loadedStateVersion >= STATE_VERSION;
+    }
+
+    boolean hasUnsupportedStateFormat() {
+        return loadedStateVersion > 0 && loadedStateVersion < STATE_VERSION;
     }
 
     private record WeatherSnapshot(UUID worldId,

@@ -269,6 +269,7 @@ class BloodMoonAtmosphereManagerTest {
         manager.start(world);
         assertTrue(storm.get());
         assertTrue(thunder.get());
+        clearWeatherDuration.set(0);
 
         YamlConfiguration disabled = config(true, true, true);
         disabled.set("bloodmoon.atmosphere.weather.enabled", false);
@@ -276,6 +277,7 @@ class BloodMoonAtmosphereManagerTest {
 
         assertFalse(storm.get());
         assertFalse(thunder.get());
+        assertEquals(6000, clearWeatherDuration.get());
         assertTrue(manager.hasSnapshotFor(WORLD_ID));
 
         manager.loadConfig(config(true, true, true));
@@ -389,12 +391,13 @@ class BloodMoonAtmosphereManagerTest {
 
     private static YamlConfiguration persistedSnapshot(boolean stormApplied, boolean thunderApplied) {
         YamlConfiguration data = new YamlConfiguration();
-        data.set("bloodmoon.atmosphere.state-version", 1);
+        data.set("bloodmoon.atmosphere.state-version", 2);
         data.set("bloodmoon.atmosphere.snapshot.world-id", WORLD_ID.toString());
         data.set("bloodmoon.atmosphere.snapshot.storm", false);
         data.set("bloodmoon.atmosphere.snapshot.thunder", false);
         data.set("bloodmoon.atmosphere.snapshot.weather-duration", 2400);
         data.set("bloodmoon.atmosphere.snapshot.thunder-duration", 1200);
+        data.set("bloodmoon.atmosphere.snapshot.clear-weather-duration", 6000);
         data.set("bloodmoon.atmosphere.snapshot.storm-applied", stormApplied);
         data.set("bloodmoon.atmosphere.snapshot.thunder-applied", thunderApplied);
         return data;

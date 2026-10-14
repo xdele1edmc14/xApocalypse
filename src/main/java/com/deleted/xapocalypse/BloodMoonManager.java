@@ -213,7 +213,10 @@ public class BloodMoonManager {
 
         UUID snapshotWorldId = atmosphere.snapshotWorldId();
         if (bloodMoonPersisted || forcedBloodMoon) {
-            if (atmosphere.isCurrentStateFormat() && snapshotWorldId == null) {
+            if (atmosphere.hasUnsupportedStateFormat()) {
+                plugin.getLogger().warning("Active Blood Moon uses an outdated weather snapshot; clearing the event safely.");
+                invalidActiveWorldState = true;
+            } else if (atmosphere.isCurrentStateFormat() && snapshotWorldId == null) {
                 plugin.getLogger().warning("Active Blood Moon has no valid weather snapshot; clearing the event safely.");
                 invalidActiveWorldState = true;
             } else if (bloodMoonWorldId != null && snapshotWorldId != null
