@@ -229,6 +229,32 @@ class BloodMoonLifecycleTest {
     }
 
     @Test
+    void currentActiveStateWithMissingWeatherTimerIsCleared() throws Exception {
+        YamlConfiguration data = currentSnapshotData();
+        data.set("bloodmoon.atmosphere.snapshot.thunder-duration", null);
+        data.save(tempDir.resolve("BloodMoonData.yml").toFile());
+
+        BloodMoonManager manager = new BloodMoonManager(plugin);
+        manager.load(tempDir.toFile());
+        manager.close();
+
+        assertFalse(manager.isPersisted());
+    }
+
+    @Test
+    void currentActiveStateWithMistypedAppliedFlagIsCleared() throws Exception {
+        YamlConfiguration data = currentSnapshotData();
+        data.set("bloodmoon.atmosphere.snapshot.storm-applied", "yes");
+        data.save(tempDir.resolve("BloodMoonData.yml").toFile());
+
+        BloodMoonManager manager = new BloodMoonManager(plugin);
+        manager.load(tempDir.toFile());
+        manager.close();
+
+        assertFalse(manager.isPersisted());
+    }
+
+    @Test
     void legacyActiveStateWithoutAWorldIdStillMigratesOnce() throws Exception {
         YamlConfiguration data = persistedEventData();
         data.set("bloodmoon.world-id", null);
@@ -272,6 +298,20 @@ class BloodMoonLifecycleTest {
         data.set("bloodmoon.persisted", true);
         data.set("bloodmoon.persisted-day", 4L);
         data.set("bloodmoon.world-id", WORLD_ID.toString());
+        return data;
+    }
+
+    private static YamlConfiguration currentSnapshotData() {
+        YamlConfiguration data = persistedEventData();
+        data.set("bloodmoon.atmosphere.state-version", 2);
+        data.set("bloodmoon.atmosphere.snapshot.world-id", WORLD_ID.toString());
+        data.set("bloodmoon.atmosphere.snapshot.storm", false);
+        data.set("bloodmoon.atmosphere.snapshot.thunder", false);
+        data.set("bloodmoon.atmosphere.snapshot.weather-duration", 2400);
+        data.set("bloodmoon.atmosphere.snapshot.thunder-duration", 1200);
+        data.set("bloodmoon.atmosphere.snapshot.clear-weather-duration", 6000);
+        data.set("bloodmoon.atmosphere.snapshot.storm-applied", true);
+        data.set("bloodmoon.atmosphere.snapshot.thunder-applied", true);
         return data;
     }
 

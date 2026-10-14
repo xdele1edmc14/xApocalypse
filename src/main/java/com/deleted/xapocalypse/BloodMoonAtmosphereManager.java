@@ -114,8 +114,7 @@ final class BloodMoonAtmosphereManager {
         if (worldId != null) {
             if (hasUnsupportedStateFormat()) {
                 plugin.getLogger().warning("Outdated Blood Moon weather snapshot; clearing the active event safely.");
-            } else if (isCurrentStateFormat()
-                    && !data.isInt(STATE_PATH + ".snapshot.clear-weather-duration")) {
+            } else if (isCurrentStateFormat() && !hasCompleteCurrentSnapshot(data)) {
                 plugin.getLogger().warning("Incomplete Blood Moon weather snapshot; clearing the active event safely.");
             } else {
                 try {
@@ -134,6 +133,18 @@ final class BloodMoonAtmosphereManager {
             }
         }
         rareScareUsed = data.getBoolean(STATE_PATH + ".rare-scare-used", false);
+    }
+
+    private boolean hasCompleteCurrentSnapshot(FileConfiguration data) {
+        String snapshotPath = STATE_PATH + ".snapshot.";
+        return data.isString(snapshotPath + "world-id")
+                && data.isBoolean(snapshotPath + "storm")
+                && data.isBoolean(snapshotPath + "thunder")
+                && data.isInt(snapshotPath + "weather-duration")
+                && data.isInt(snapshotPath + "thunder-duration")
+                && data.isInt(snapshotPath + "clear-weather-duration")
+                && data.isBoolean(snapshotPath + "storm-applied")
+                && data.isBoolean(snapshotPath + "thunder-applied");
     }
 
     void writeState(FileConfiguration data) {
