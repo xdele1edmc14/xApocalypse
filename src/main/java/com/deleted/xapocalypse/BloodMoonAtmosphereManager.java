@@ -118,7 +118,8 @@ final class BloodMoonAtmosphereManager {
                         data.getBoolean(STATE_PATH + ".snapshot.storm"),
                         data.getBoolean(STATE_PATH + ".snapshot.thunder"),
                         data.getInt(STATE_PATH + ".snapshot.weather-duration"),
-                        data.getInt(STATE_PATH + ".snapshot.thunder-duration"));
+                        data.getInt(STATE_PATH + ".snapshot.thunder-duration"),
+                        data.getInt(STATE_PATH + ".snapshot.clear-weather-duration"));
                 stormApplied = data.getBoolean(STATE_PATH + ".snapshot.storm-applied", false);
                 thunderApplied = data.getBoolean(STATE_PATH + ".snapshot.thunder-applied", false);
             } catch (IllegalArgumentException exception) {
@@ -138,6 +139,7 @@ final class BloodMoonAtmosphereManager {
             data.set(STATE_PATH + ".snapshot.thunder", snapshot.thunder());
             data.set(STATE_PATH + ".snapshot.weather-duration", snapshot.weatherDuration());
             data.set(STATE_PATH + ".snapshot.thunder-duration", snapshot.thunderDuration());
+            data.set(STATE_PATH + ".snapshot.clear-weather-duration", snapshot.clearWeatherDuration());
             data.set(STATE_PATH + ".snapshot.storm-applied", stormApplied);
             data.set(STATE_PATH + ".snapshot.thunder-applied", thunderApplied);
         }
@@ -158,7 +160,8 @@ final class BloodMoonAtmosphereManager {
                 world.hasStorm(),
                 world.isThundering(),
                 world.getWeatherDuration(),
-                world.getThunderDuration());
+                world.getThunderDuration(),
+                world.getClearWeatherDuration());
         activeWorld = world;
         stormApplied = false;
         thunderApplied = false;
@@ -177,7 +180,8 @@ final class BloodMoonAtmosphereManager {
                     world.hasStorm(),
                     world.isThundering(),
                     world.getWeatherDuration(),
-                    world.getThunderDuration());
+                    world.getThunderDuration(),
+                    world.getClearWeatherDuration());
             persistState.run();
         } else if (!snapshot.worldId().equals(world.getUID())) {
             plugin.getLogger().warning("Saved Blood Moon weather belongs to a different world; refusing to transfer the atmosphere.");
@@ -287,6 +291,9 @@ final class BloodMoonAtmosphereManager {
 
         if (stormApplied) restoreStorm();
         if (thunderApplied) restoreThunder();
+        if (restorePreviousWeather && (stormApplied || thunderApplied)) {
+            activeWorld.setClearWeatherDuration(snapshot.clearWeatherDuration());
+        }
         stormApplied = false;
         thunderApplied = false;
     }
@@ -402,6 +409,7 @@ final class BloodMoonAtmosphereManager {
                                    boolean storm,
                                    boolean thunder,
                                    int weatherDuration,
-                                   int thunderDuration) {
+                                   int thunderDuration,
+                                   int clearWeatherDuration) {
     }
 }

@@ -44,6 +44,7 @@ class BloodMoonAtmosphereManagerTest {
     private AtomicBoolean thunder;
     private AtomicInteger weatherDuration;
     private AtomicInteger thunderDuration;
+    private AtomicInteger clearWeatherDuration;
 
     @BeforeEach
     void setUp() {
@@ -54,6 +55,7 @@ class BloodMoonAtmosphereManagerTest {
         thunder = new AtomicBoolean(false);
         weatherDuration = new AtomicInteger(2400);
         thunderDuration = new AtomicInteger(1200);
+        clearWeatherDuration = new AtomicInteger(6000);
 
         world = mock(World.class);
         when(world.getUID()).thenReturn(WORLD_ID);
@@ -61,6 +63,7 @@ class BloodMoonAtmosphereManagerTest {
         when(world.isThundering()).thenAnswer(invocation -> thunder.get());
         when(world.getWeatherDuration()).thenAnswer(invocation -> weatherDuration.get());
         when(world.getThunderDuration()).thenAnswer(invocation -> thunderDuration.get());
+        when(world.getClearWeatherDuration()).thenAnswer(invocation -> clearWeatherDuration.get());
         org.mockito.Mockito.doAnswer(invocation -> {
             storm.set(invocation.getArgument(0));
             return null;
@@ -77,6 +80,10 @@ class BloodMoonAtmosphereManagerTest {
             thunderDuration.set(invocation.getArgument(0));
             return null;
         }).when(world).setThunderDuration(org.mockito.ArgumentMatchers.anyInt());
+        org.mockito.Mockito.doAnswer(invocation -> {
+            clearWeatherDuration.set(invocation.getArgument(0));
+            return null;
+        }).when(world).setClearWeatherDuration(org.mockito.ArgumentMatchers.anyInt());
 
         random = mock(RandomGenerator.class);
         when(random.nextLong(anyLong(), anyLong())).thenReturn(60_000L);
@@ -111,6 +118,35 @@ class BloodMoonAtmosphereManagerTest {
         assertEquals(2400, weatherDuration.get());
         assertEquals(1200, thunderDuration.get());
         assertEquals(2, saves.get());
+    }
+
+    @Test
+    void endRestoresTheSeparateClearWeatherTimer() {
+        manager.loadConfig(config(true, true, true));
+        manager.start(world);
+        clearWeatherDuration.set(0);
+
+        manager.end();
+
+        assertEquals(6000, clearWeatherDuration.get());
+    }
+
+    @Test
+    void clearWeatherTimerSurvivesSavedStateReload() {
+        manager.loadConfig(config(true, true, true));
+        manager.start(world);
+        YamlConfiguration data = new YamlConfiguration();
+        manager.writeState(data);
+        clearWeatherDuration.set(0);
+
+        BloodMoonAtmosphereManager reloaded = new BloodMoonAtmosphereManager(
+                plugin, clock, random, name -> "minecraft:ambient.cave", () -> { });
+        reloaded.loadState(data);
+        reloaded.loadConfig(config(true, true, true));
+        reloaded.resume(world);
+        reloaded.end();
+
+        assertEquals(6000, clearWeatherDuration.get());
     }
 
     @Test
