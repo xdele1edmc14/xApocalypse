@@ -9,7 +9,7 @@ This page covers everything you need to get xApocalypse running on your server.
 | Requirement | Details |
 |-------------|---------|
 | **Server software** | Paper 26.2 |
-| **API version** | `26.2` (declared in `plugin.yml`) |
+| **API version** | `1.21.11` (declared in `plugin.yml`) |
 | **Java** | **25** or newer |
 | **GriefPrevention** | *Optional* soft-dependency — enables claim protection |
 | **MythicMobs** | *Optional* soft-dependency — enables the Mutant boss |
@@ -21,7 +21,7 @@ This page covers everything you need to get xApocalypse running on your server.
 
 ## Installation
 
-1. Download or build `xApocalypse-1.7.0.jar` (see [Building from Source](#building-from-source)).
+1. Download or build `xApocalypse-1.7.1.jar` (see [Building from Source](#building-from-source)).
 2. Place the jar in your server's `plugins/` directory.
 3. **Start the server once.** This generates the default configuration files.
 4. Stop the server, edit the configs to taste (see the [Configuration Reference](Configuration-Reference.md)), and start again.
@@ -67,7 +67,7 @@ The project uses Maven:
 mvn clean package
 ```
 
-The compiled jar is written to `target/xApocalypse-1.7.0.jar`.
+The compiled jar is written to `target/xApocalypse-1.7.1.jar`.
 
 ---
 

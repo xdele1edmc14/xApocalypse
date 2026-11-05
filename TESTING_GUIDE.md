@@ -10,6 +10,15 @@ This guide covers testing all the major fixes and improvements made to the xApoc
 - Test world with various terrain types
 - Debug mode enabled in config.yml for better logging
 
+## 1.7.1 Daytime Spawn Quick Check
+
+1. Set `apocalypse-settings.day-spawn-chance: 0.0` and use a short `spawn-rate` in a test configuration.
+2. Run `/xa reload`, then stand in an enabled, non-lobby world in Survival mode during daytime for several spawn cycles.
+3. Confirm no xApocalypse hordes spawn and the debug log never reports the player as spawn-eligible.
+4. Set `day-spawn-chance: 1.0`, run `/xa reload`, and wait for the next daytime cycle.
+5. Confirm a daytime horde now spawns, proving the test setup can observe both sides of the setting.
+6. Repeat one cycle at night and confirm normal night spawning is unchanged.
+
 ## 1.7.0 Blood Moon Quick Check
 
 1. Run `/xa forcebloodmoon 5` in an enabled survival world.

@@ -44,7 +44,8 @@ def _make_rule(path: str, pre: str, suf: str = "") -> tuple[str, re.Pattern]:
     own <artifactId>, never on a dependency's <version>.
     """
     pattern = re.compile(
-        "(?P<pre>" + pre + ")(?P<ver>" + VERSION_TOKEN + ")(?P<suf>" + suf + ")"
+        "(?P<pre>" + pre + ")(?P<ver>" + VERSION_TOKEN + ")(?P<suf>" + suf + ")",
+        re.MULTILINE,
     )
     return path, pattern
 
@@ -52,7 +53,7 @@ def _make_rule(path: str, pre: str, suf: str = "") -> tuple[str, re.Pattern]:
 # Every place the version lives. Add a line here to cover a new reference.
 RULES: list[tuple[str, re.Pattern]] = [
     # plugin.yml — the canonical source: version: "1.0.1"
-    _make_rule("src/main/resources/plugin.yml", r'version:\s*"', r'"'),
+    _make_rule("src/main/resources/plugin.yml", r'^version:\s*"', r'"'),
     # pom.xml — the project version only (scoped by the project's artifactId)
     _make_rule(
         "pom.xml",
@@ -74,7 +75,7 @@ RULES: list[tuple[str, re.Pattern]] = [
 ]
 
 # The plugin.yml version line is the source of truth for "current version".
-_CURRENT_RE = re.compile(r'version:\s*"(' + VERSION_TOKEN + r')"')
+_CURRENT_RE = re.compile(r'^version:\s*"(' + VERSION_TOKEN + r')"', re.MULTILINE)
 _PLUGIN_YML = "src/main/resources/plugin.yml"
 
 

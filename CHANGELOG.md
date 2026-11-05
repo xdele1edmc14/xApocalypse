@@ -2,6 +2,12 @@
 
 All notable changes to xApocalypse are documented here.
 
+## [1.7.1] - 2026-11-05
+
+### Fixed
+
+- Guaranteed that `apocalypse-settings.day-spawn-chance: 0.0` disables daytime horde spawning, including the random generator's exact `0.0` boundary.
+
 ## [1.7.0] - 2026-11-06
 
 ### Added
