@@ -6,7 +6,7 @@ This is the quick resume point for the weekly release plan.
 
 **Working build:** 1.7.2
 **Next action:** begin the safe, notification-only Modrinth update checker.
-**Latest archived build:** `2026-11-05/xApocalypse-1.7.1.jar`
+**Latest archived build:** `2026-11-12/xApocalypse-1.7.1.jar` (bStats rebuild)
 **Archive note:** confirm or correct the pre-existing `2026-11-06/xApocalypse-1.7.0.jar` folder date before publishing 1.7.0.
 
 ## Release queue
@@ -18,7 +18,7 @@ This is the quick resume point for the weekly release plan.
 | 1.6.4  |      2026-10-23 | Built, archived, live-tested, committed and pushed                          | Moderate/minor bugs, lifecycle cleanup and the final admin-spawn load fixes |
 | 1.6.5  |      2026-10-30 | Built, archived and tested; 75 automated tests plus live regressions passed | Exploits and regression coverage                                            |
 | 1.7.0  |      2026-11-06 | Built, tested and booted; full in-game guide pending                        | Blood Moon atmosphere, scary sounds and sleep prevention                    |
-| 1.7.1  |      2026-11-05 | Built, archived, automated-tested and live-tested                           | Fix daytime spawning when the configured chance is `0.0`                    |
+| 1.7.1  |      2026-11-05 | Built, live-tested, then rebuilt and boot-tested with bStats                 | Fix daytime spawning when the configured chance is `0.0`                    |
 | 1.7.2  |      2026-11-20 | Not started                                                                 | Safe Modrinth update checker and admin notifications                        |
 | 1.8.0  |      2026-11-27 | Not started                                                                 | Crouching reduces zombie detection range                                    |
 | 1.9.0  |      2026-12-04 | Not started                                                                 | Configurable/renamable zombie display names                                 |

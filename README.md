@@ -227,6 +227,8 @@ mythicmobs:
 2. Start the server once to generate `config.yml` and `messages.yml`.
 3. Edit the configs to taste and run `/xa reload`.
 
+xApocalypse uses [bStats](https://bstats.org/) for anonymous usage metrics. Server owners can opt out globally in `plugins/bStats/config.yml`.
+
 ### Building from source
 
 ```bash

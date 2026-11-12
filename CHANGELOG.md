@@ -4,6 +4,10 @@ All notable changes to xApocalypse are documented here.
 
 ## [1.7.1] - 2026-11-05
 
+### Added
+
+- Added anonymous bStats usage metrics with plugin ID `35281`; server owners can opt out through `plugins/bStats/config.yml`.
+
 ### Fixed
 
 - Guaranteed that `apocalypse-settings.day-spawn-chance: 0.0` disables daytime horde spawning, including the random generator's exact `0.0` boundary.

@@ -41,6 +41,7 @@ public class xApocalypse extends JavaPlugin {
     private HordeManager horde;
     private DropManager dropManager;
     private xApocalypseCommand commandExecutor;
+    private final BStatsManager bStats = new BStatsManager();
 
     // --- GENERAL CONFIG ---
     private List<String> enabledWorlds;
@@ -134,6 +135,7 @@ public class xApocalypse extends JavaPlugin {
         }
 
         performanceWatchdog.start();
+        bStats.start(this);
 
         printStartupBanner();
     }
@@ -158,6 +160,8 @@ public class xApocalypse extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        bStats.stop();
+
         if (immunity != null) {
             immunity.save();
         }
