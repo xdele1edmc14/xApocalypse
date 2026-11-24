@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-1.7.1-brightgreen?style=flat-square"/>
+  <img src="https://img.shields.io/badge/Version-1.7.2-brightgreen?style=flat-square"/>
   <img src="https://img.shields.io/badge/API-1.21.11-red?style=flat-square"/>
   <img src="https://img.shields.io/badge/Java-25-orange?style=flat-square"/>
   <img src="https://img.shields.io/badge/License-GPLv3-yellow?style=flat-square"/>

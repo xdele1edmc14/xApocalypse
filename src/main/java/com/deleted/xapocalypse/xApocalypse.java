@@ -42,6 +42,8 @@ public class xApocalypse extends JavaPlugin {
     private DropManager dropManager;
     private xApocalypseCommand commandExecutor;
     private final BStatsManager bStats = new BStatsManager();
+    private final ModrinthUpdateChecker updateChecker = new ModrinthUpdateChecker();
+    private UpdateCheckCoordinator updateChecks;
 
     // --- GENERAL CONFIG ---
     private List<String> enabledWorlds;
@@ -136,8 +138,44 @@ public class xApocalypse extends JavaPlugin {
 
         performanceWatchdog.start();
         bStats.start(this);
+        startUpdateChecks();
 
         printStartupBanner();
+    }
+
+    private void startUpdateChecks() {
+        if (updateChecks == null) {
+            updateChecks = new UpdateCheckCoordinator(
+                    updateChecker::check,
+                    new UpdateCheckCoordinator.Scheduler() {
+                        @Override
+                        public UpdateCheckCoordinator.Task scheduleRepeating(
+                                Runnable runnable, long initialDelayTicks, long periodTicks) {
+                            var task = Bukkit.getScheduler().runTaskTimer(
+                                    xApocalypse.this, runnable, initialDelayTicks, periodTicks);
+                            return task::cancel;
+                        }
+
+                        @Override
+                        public void runMain(Runnable runnable) {
+                            Bukkit.getScheduler().runTask(xApocalypse.this, runnable);
+                        }
+                    },
+                    this::publishAvailableUpdate,
+                    error -> debugLog("Could not check Modrinth for updates: " + error.getMessage()),
+                    getDescription().getVersion());
+        }
+        updateChecks.start(getConfig().getBoolean("update-checker.enabled", true));
+    }
+
+    private void publishAvailableUpdate(String availableVersion) {
+        String currentVersion = getDescription().getVersion();
+        getLogger().warning("xApocalypse v" + availableVersion + " is available on Modrinth. "
+                + "You are running v" + currentVersion + ". Download it from "
+                + ModrinthUpdateChecker.PROJECT_URL);
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            notifyAdminAboutUpdate(player);
+        }
     }
 
     /**
@@ -160,6 +198,9 @@ public class xApocalypse extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (updateChecks != null) {
+            updateChecks.stop();
+        }
         bStats.stop();
 
         if (immunity != null) {
@@ -251,6 +292,7 @@ public class xApocalypse extends JavaPlugin {
             mythicMobsManager.loadConfig();
         }
         startSpawnerTask();
+        startUpdateChecks();
         immunity.startCheckTask();
         bloodMoon.resumeAtmosphereIfActive();
         if (performanceWatchdog != null) {
@@ -502,6 +544,24 @@ public class xApocalypse extends JavaPlugin {
 
     public MessageManager getMessages() {
         return messageManager;
+    }
+
+    public void notifyAdminAboutUpdate(Player player) {
+        String availableVersion = updateChecks == null
+                ? null
+                : updateChecks.availableVersion().orElse(null);
+        boolean notificationsEnabled = getConfig().getBoolean("update-checker.notify-admins", true);
+        boolean hasPermission = player.hasPermission("xapocalypse.admin");
+        if (!shouldNotifyAdmin(availableVersion, notificationsEnabled, hasPermission)) {
+            return;
+        }
+        player.sendMessage(messageManager.get("update-available",
+                availableVersion, getDescription().getVersion(), ModrinthUpdateChecker.PROJECT_URL));
+    }
+
+    static boolean shouldNotifyAdmin(
+            String availableVersion, boolean notificationsEnabled, boolean hasPermission) {
+        return availableVersion != null && notificationsEnabled && hasPermission;
     }
 
     // ==================================================================================

@@ -10,7 +10,13 @@ This page documents every key in `config.yml`. Values shown are the shipped defa
 
 ```yaml
 debug-mode: false   # true = verbose console logging (spawn decisions, scent, blood moon, etc.)
+
+update-checker:
+  enabled: true        # asynchronously check Modrinth on startup and every 6 hours
+  notify-admins: true  # notify online/joining xapocalypse.admin players
 ```
+
+The update checker is notification-only. It never downloads a jar, replaces plugin files, or restarts the server.
 
 ## Worlds
 

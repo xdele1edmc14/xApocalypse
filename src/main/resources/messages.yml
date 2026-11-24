@@ -1,4 +1,4 @@
-# xApocalypse v1.7.1 - Localization File
+# xApocalypse v1.7.2 - Localization File
 # SUPPORTS BOTH FORMATS:
 # - MiniMessage: <gradient:red:blue>Text</gradient>, <rainbow>Text</rainbow>, <#FF5555>Hex</#FF5555>
 # - Legacy: &a, &b, &l, &n, §c, etc.
@@ -10,12 +10,13 @@ reload-success: "<gradient:green:aqua>Configuration and language files reloaded!
 reload-error: "&cError reloading: {0}"
 no-permission: "&cYou don't have permission to use this command."
 player-not-found: "&cPlayer not found: {0}"
+update-available: "&eA new xApocalypse update is available: &fv{0} &8(current: v{1}) &a{2}"
 
 # Commands
 commands:
   unknown: "&cUnknown sub-command: &f{0}&c. Try &f/xa help&c."
   help:
-    title: "&8&m       &r &c&lxApocalypse &r&7v1.7.1 &8&m       "
+    title: "&8&m       &r &c&lxApocalypse &r&7v1.7.2 &8&m       "
     author: "&7Created by &fxDele1ed"
     help: "&c/xa help &8» &7Show this command list"
     spawn: "&c/xa spawn <type|horde> [count] [radius] &8» &7Spawn zombies"

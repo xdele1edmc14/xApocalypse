@@ -2,6 +2,13 @@
 
 All notable changes to xApocalypse are documented here.
 
+## [1.7.2] - 2026-11-24
+
+### Added
+
+- Added a configurable Modrinth update checker that runs on startup and every six hours, notifying the console and online or joining admins when a newer stable release is available.
+- The checker is notification-only: it never downloads updates, replaces files, or restarts the server.
+
 ## [1.7.1] - 2026-11-05
 
 ### Added

@@ -4,9 +4,9 @@ This is the quick resume point for the weekly release plan.
 
 ## Current position
 
-**Working build:** 1.7.2
-**Next action:** begin the safe, notification-only Modrinth update checker.
-**Latest archived build:** `2026-11-12/xApocalypse-1.7.1.jar` (bStats rebuild)
+**Working build:** 1.8.0
+**Next action:** begin crouch stealth so crouching reduces zombie detection range.
+**Latest archived build:** `2026-11-24/xApocalypse-1.7.2.jar` (notification-only Modrinth update checker)
 **Archive note:** confirm or correct the pre-existing `2026-11-06/xApocalypse-1.7.0.jar` folder date before publishing 1.7.0.
 
 ## Release queue
@@ -19,7 +19,7 @@ This is the quick resume point for the weekly release plan.
 | 1.6.5  |      2026-10-30 | Built, archived and tested; 75 automated tests plus live regressions passed | Exploits and regression coverage                                            |
 | 1.7.0  |      2026-11-06 | Built, tested and booted; full in-game guide pending                        | Blood Moon atmosphere, scary sounds and sleep prevention                    |
 | 1.7.1  |      2026-11-05 | Built, live-tested, then rebuilt and boot-tested with bStats                 | Fix daytime spawning when the configured chance is `0.0`                    |
-| 1.7.2  |      2026-11-20 | Not started                                                                 | Safe Modrinth update checker and admin notifications                        |
+| 1.7.2  |      2026-11-24 | Built, archived and boot-tested; 127 automated tests passed                 | Safe Modrinth update checker and admin notifications                        |
 | 1.8.0  |      2026-11-27 | Not started                                                                 | Crouching reduces zombie detection range                                    |
 | 1.9.0  |      2026-12-04 | Not started                                                                 | Configurable/renamable zombie display names                                 |
 | 1.10.0 |      2026-12-11 | Not started                                                                 | Localization foundation plus Spanish, Hindi and other reviewed translations |
@@ -34,22 +34,21 @@ This is the quick resume point for the weekly release plan.
 
 ## Remaining builds
 
-Twelve weekly builds follow 1.7.1:
+Eleven weekly builds follow 1.7.2:
 
-1. 1.7.2 — update checker
-2. 1.8.0 — crouch stealth
-3. 1.9.0 — renamable zombies
-4. 1.10.0 — translations
-5. 1.11.0 — Screamer and Stalker
-6. 1.12.0 — thirst
-7. 1.13.0 — airdrops
-8. 1.14.0 — airdrop GUI and weights
-9. 1.15.0 — admin dashboard
-10. 1.16.0 — rogue NPC
-11. 1.16.1 — rogue NPC balancing
-12. 1.17.0 — default zombie boss
+1. 1.8.0 — crouch stealth
+2. 1.9.0 — renamable zombies
+3. 1.10.0 — translations
+4. 1.11.0 — Screamer and Stalker
+5. 1.12.0 — thirst
+6. 1.13.0 — airdrops
+7. 1.14.0 — airdrop GUI and weights
+8. 1.15.0 — admin dashboard
+9. 1.16.0 — rogue NPC
+10. 1.16.1 — rogue NPC balancing
+11. 1.17.0 — default zombie boss
 
-## 1.7.2 update-check scope
+## 1.7.2 update-check scope (completed)
 
 - Check Modrinth on server startup and every 6 hours.
 - Notify the console and online admins when a newer stable version exists.

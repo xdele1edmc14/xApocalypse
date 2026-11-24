@@ -141,6 +141,8 @@ public class xApocalypseListener implements Listener {
         bloodMoon.sendWarningOnJoinIfApplicable(player);
 
         immunity.onPlayerJoin(player);
+
+        plugin.notifyAdminAboutUpdate(player);
     }
 
     @EventHandler

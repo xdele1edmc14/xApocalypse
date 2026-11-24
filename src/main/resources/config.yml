@@ -1,6 +1,12 @@
-# xApocalypse v1.7.1 - Balanced Configuration
+# xApocalypse v1.7.2 - Balanced Configuration
 
 debug-mode: false  # Set to true for detailed console logs
+
+# Checks Modrinth on startup and every 6 hours for a newer stable release.
+# This never downloads or changes any files.
+update-checker:
+  enabled: true
+  notify-admins: true  # Notify players with xapocalypse.admin when they join
 
 enabled-worlds:
   - world

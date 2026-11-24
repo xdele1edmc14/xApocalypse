@@ -6,7 +6,7 @@
 
     <groupId>com.deleted</groupId>
     <artifactId>xapocalypse</artifactId>
-    <version>1.7.1</version>
+    <version>1.7.2</version>
     <packaging>jar</packaging>
 
     <name>xApocalypse</name>
@@ -94,6 +94,12 @@
         </dependency>
 
         <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.13.2</version>
+        </dependency>
+
+        <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
             <version>5.10.3</version>
@@ -140,6 +146,10 @@
                         <relocation>
                             <pattern>org.bstats</pattern>
                             <shadedPattern>com.deleted.xapocalypse.metrics</shadedPattern>
+                        </relocation>
+                        <relocation>
+                            <pattern>com.google.gson</pattern>
+                            <shadedPattern>com.deleted.xapocalypse.libs.gson</shadedPattern>
                         </relocation>
                     </relocations>
                 </configuration>
